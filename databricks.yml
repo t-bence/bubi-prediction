@@ -3,8 +3,39 @@
 bundle:
   name: bubi_prediction
 
+variables:
+  cluster:
+    default: 0813-161942-mce0ag9k
+    description: The ID of the cluster to use
+  catalog:
+    default: bence-toth-catalog
+    description: Project catalog
+  schema:
+    default: bubi_${bundle.target}
+    description: Project schema
+  volume:
+    default: bubi_jsons
+    description: Name of the volume that contains the files
+  checkpoint_volume_name:
+    default: checkpoint
+    description: Name of the volume used for streaming checkpoints
+  experiment_name:
+    default: /Users/${workspace.current_user.userName}/${bundle.target} BUBI Prophet experiment
+    description: MLFlow experiment to track the Bubi model development
+
 include:
   - resources/*.yml
+
+resources:
+  volumes:
+    checkpoint_volume:
+      catalog_name: ${var.catalog}
+      schema_name: ${var.schema}
+      name: ${var.checkpoint_volume_name}
+  experiments:
+    model_experiment:
+      name: ${var.experiment_name}
+
 
 targets:
   dev:
