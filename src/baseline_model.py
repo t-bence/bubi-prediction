@@ -1,9 +1,10 @@
 # Databricks notebook source
 from datetime import datetime
 import mlflow
-import mlflow.prophet
-from prophet import Prophet, serialize
+import mlflow.sklearn
 from mlflow.models import infer_signature
+from sklearn.dummy import DummyClassifier
+
 import pandas as pd
 
 from pyspark.sql import SparkSession
@@ -18,6 +19,7 @@ dbutils.widgets.text("schema", "", "Schema")
 dbutils.widgets.text("experiment_name", "", "Experiment name")
 dbutils.widgets.text("station_id", "", "Station ID")
 dbutils.widgets.text("train_cutoff", "", "Train cutoff")
+dbutils.widgets.text("model_name", "", "Model name")
 
 
 catalog = dbutils.widgets.get("catalog")
@@ -25,9 +27,10 @@ schema = dbutils.widgets.get("schema")
 experiment_name = dbutils.widgets.get("experiment_name")
 station_id = int(dbutils.widgets.get("station_id"))
 train_cutoff = datetime.fromisoformat(dbutils.widgets.get("train_cutoff"))
+model_name = dbutils.widgets.get("model_name")
 
 
-if not catalog or not schema or not experiment_name or not station_id or not train_cutoff:
+if not catalog or not schema or not experiment_name or not station_id or not train_cutoff or not model_name:
 	raise ValueError("None of the parameters may be empty")
 
 
@@ -70,61 +73,52 @@ mlflow.set_registry_uri("databricks-uc")
 mlflow.set_experiment(experiment_name)
 mlflow.autolog(disable=True)
 
-def extract_params(pr_model):
-    params = {attr: getattr(pr_model, attr) for attr in serialize.SIMPLE_ATTRIBUTES}
-    return {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))}
-
-
 with mlflow.start_run() as run:
-    model = Prophet()
 
-    model.fit(train_df)
+    mlflow.sklearn.autolog(False)
 
-    params = extract_params(model)
+    train_X = train_df[["ds"]]
+    train_y = train_df["y"]
 
-    # Prepare future dataframe for prediction
-    future_date = pd.DataFrame({'ds': ['2025-02-13 12:00:00']})
-    future_date['ds'] = pd.to_datetime(future_date['ds'])
+    mean_bikes = round(train_y.mean())
+    
+    model = DummyClassifier(strategy='constant', constant=mean_bikes).fit(train_X, train_y)
 
-    # Predict
-    forecast = model.predict(future_date)
-
-    # Infer model signature
-    signature = infer_signature(future_date, forecast)
-    model_info = mlflow.prophet.log_model(
-        model,
-        artifact_path="prophet_model",
-        signature=signature,
-        input_example=train_df[["ds"]].head(10)
-    )
-    mlflow.log_params(params)
-    mlflow.set_tag(key="station_id", value=station_id)
-
-    # Evaluate the model on training df
-    train_evaluation_result = mlflow.evaluate(
-        model=model_info.model_uri,
+    mlflow_model = mlflow.models.Model()
+    mlflow.pyfunc.add_to_model(mlflow_model, loader_module="mlflow.sklearn")
+    pyfunc_model = mlflow.pyfunc.PyFuncModel(model_meta=mlflow_model, model_impl=model)
+    training_eval_result = mlflow.evaluate(
+        model=pyfunc_model,
         data=train_df,
         targets="y",
-        predictions="yhat",
         model_type="regressor",
         evaluator_config = {"log_model_explainability": False,
                             "metric_prefix": "train_" , "pos_label": 1}
     )
-
-    # Evaluate the model on test df
-    test_evaluation_result = mlflow.evaluate(
-        model=model_info.model_uri,
+    
+    # Log metrics for the test set
+    test_eval_result = mlflow.evaluate(
+        model=pyfunc_model,
         data=test_df,
         targets="y",
-        predictions="yhat",
         model_type="regressor",
         evaluator_config = {"log_model_explainability": False,
                             "metric_prefix": "test_" , "pos_label": 1}
     )
-
-    test_mae = test_evaluation_result.metrics["test_mean_absolute_error"]
+    test_mae = test_eval_result.metrics["test_mean_absolute_error"]
 
     print(test_mae)
 
-# forecast_result = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
-# forecast_result.insert(0, 'station_id', station_id)
+
+model_fqn = f"{catalog}.{schema}.{model_name}"
+
+model_details = mlflow.register_model(f"runs:/{run.info.run_id}/model", f"{model_fqn}")
+
+# COMMAND ----------
+
+# Set this version as the Baseline model, using its model alias
+mlflow.client.MlflowClient().set_registered_model_alias(
+    name=model_fqn,
+    alias="Baseline",
+    version=model_details.version
+)
