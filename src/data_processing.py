@@ -5,7 +5,7 @@ import pyspark.sql.functions as F
 
 from includes.utilities import (
     get_json_schema,
-    get_full_name
+    get_table_name
 )
 
 spark = SparkSession.builder.getOrCreate()
@@ -31,6 +31,9 @@ if not catalog or not schema or not volume or not checkpoint_volume_name:
 
 # COMMAND ----------
 
+# experiment with this...
+# spark.conf.set("spark.sql.shuffle.partitions", spark.sparkContext.defaultParallelism)
+
 bronze = (spark
     .readStream
     .format("cloudFiles")
@@ -40,8 +43,6 @@ bronze = (spark
     .withColumn("filename", F.col("_metadata.file_name"))
 )
 
-checkpoint_location = get_full_name(catalog, schema, "checkpoint")
-#spark.sql(f"CREATE VOLUME IF NOT EXISTS {checkpoint_location}")
 
 bronze_query = (bronze
     .writeStream
@@ -49,7 +50,7 @@ bronze_query = (bronze
     .queryName("json_stream")
     .trigger(availableNow=True)
     .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/bronze")
-    .toTable(get_full_name(catalog, schema, "bronze"))
+    .toTable(get_table_name(catalog, schema, "bronze"))
 )
 
 bronze_query.awaitTermination()
@@ -66,7 +67,7 @@ bronze_query.awaitTermination()
 date_length = len("2024-03-14T01-30-02") # skip trailing Z
 
 silver = (spark.readStream
-    .table(get_full_name(catalog, schema, "bronze"))
+    .table(get_table_name(catalog, schema, "bronze"))
     .withColumn("ts", F.to_timestamp(
         F.substring("filename", 0, date_length), "yyyy-MM-dd'T'HH-mm-ss")
 	)
@@ -107,7 +108,7 @@ silver = (spark.readStream
     .queryName("silver_stream")
     .trigger(availableNow=True)
     .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/silver")
-    .toTable(get_full_name(catalog, schema, "silver"))
+    .toTable(get_table_name(catalog, schema, "silver"))
 	.awaitTermination()
 )
 
@@ -196,7 +197,7 @@ silver = (spark.readStream
 
 
 gold = (spark.read
-	.table(get_full_name(catalog, schema, "silver"))
+	.table(get_table_name(catalog, schema, "silver"))
     .groupBy("station_id", "ts")
     .agg(
         F.first("bikes").alias("bikes")
@@ -206,5 +207,5 @@ gold = (spark.read
 gold.display()
 
 gold.write.mode("overwrite").saveAsTable(
-    get_full_name(catalog, schema, "gold")
+    get_table_name(catalog, schema, "gold")
 )

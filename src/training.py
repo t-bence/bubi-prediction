@@ -1,10 +1,11 @@
 # Databricks notebook source
 
 import mlflow
+import mlflow.cli
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 
-from includes.utilities import get_full_name
+from includes.utilities import get_table_name
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -20,26 +21,10 @@ if not catalog or not schema or not experiment_name:
 	raise ValueError("Catalog, Schema, and Experiment name must not be empty")
 
 
-def get_latest_model_version(model_name):
-    latest_version = 1
-    mlflow_client = mlflow.MlflowClient()
-    for mv in mlflow_client.search_model_versions(f"name='{model_name}'"):
-        version_int = int(mv.version)
-        if version_int > latest_version:
-            latest_version = version_int
-    return latest_version
-
 mlflow.set_registry_uri("databricks-uc")
 
-# End any existing runs (in the case this notebook is being run for a second time)
-mlflow.end_run()
-
-# Start an mlflow run, which is needed to log the model
-mlflow.start_run()
-
-
 # Load gold table
-gold_df = (spark.read.table(get_full_name(catalog, schema, "gold")))
+gold_df = (spark.read.table(get_table_name(catalog, schema, "gold")))
 
 # COMMAND ----------
 # MAGIC %md
@@ -55,61 +40,66 @@ gold_df = (spark.read.table(get_full_name(catalog, schema, "gold")))
 
 # COMMAND ----------
 
-from prophet import Prophet, serialize
-import mlflow.prophet
-from mlflow.models import infer_signature
-
-mlflow.autolog(disable=True)
-
-# TODO: make it parametric
-mlflow.set_experiment(experiment_name)
-
 mlflow.end_run()
 
 KRISZTINA_TER_ID = 2100
 
-krisztina_pd = (gold_df
-    .filter(F.col("station_id") == KRISZTINA_TER_ID)
-    .selectExpr("ts AS ds", "bikes AS y")
-    .toPandas()
+def forecast_station_bikes(key: tuple, history_pd):
+    """The function doing the training.
+    Tuple `key` will contain the grouping key, `station_id`."""
+    import mlflow
+    import mlflow.prophet
+    from prophet import Prophet, serialize
+    from mlflow.models import infer_signature
+    import pandas as pd
+
+    mlflow.set_registry_uri("databricks-uc")
+    mlflow.set_experiment(experiment_name)
+    mlflow.autolog(disable=True)
+
+    station_id = int(key[0])
+
+    def extract_params(pr_model):
+        params = {attr: getattr(pr_model, attr) for attr in serialize.SIMPLE_ATTRIBUTES}
+        return {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))}
+
+
+    with mlflow.start_run() as run:
+        model = Prophet()
+
+        model.fit(history_pd)
+
+        params = extract_params(model)
+
+        # Prepare future dataframe for prediction
+        future_date = pd.DataFrame({'ds': ['2025-02-13 12:00:00']})
+        future_date['ds'] = pd.to_datetime(future_date['ds'])
+
+        # Predict
+        forecast = model.predict(future_date)
+
+        # Infer model signature
+        signature = infer_signature(future_date, forecast)
+        model_info = mlflow.prophet.log_model(
+            model,
+            artifact_path="prophet_model",
+            signature=signature,
+            input_example=history_pd[["ds"]].head(10)
+        )
+        mlflow.log_params(params)
+        mlflow.set_tag(key="station_id", value=station_id)
+
+        forecast_result = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+        forecast_result.insert(0, 'station_id', station_id)
+        return forecast_result
+    
+result_schema = 'station_id INTEGER, ds TIMESTAMP, yhat FLOAT, yhat_lower FLOAT, yhat_upper FLOAT'
+
+bikes_per_station = (gold_df
+    .selectExpr("ts AS ds", "bikes AS y", "station_id")
+    .groupBy("station_id")
+    .applyInPandas(forecast_station_bikes, schema=result_schema)
+    .sort("station_id")
 )
 
-def extract_params(pr_model):
-    params = {attr: getattr(pr_model, attr) for attr in serialize.SIMPLE_ATTRIBUTES}
-    return {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))}
-
-with mlflow.start_run() as run:
-    model = Prophet()
-
-    model.fit(krisztina_pd)
-
-    params = extract_params(model)
-
-    # Prepare future dataframe for prediction
-    future = model.make_future_dataframe(periods=10, freq='D')
-    forecast = model.predict(future)
-
-    # Infer model signature
-    signature = infer_signature(future, forecast)
-    model_info = mlflow.prophet.log_model(
-         model,
-         artifact_path="prophet_model",
-         signature=signature,
-         input_example=krisztina_pd[["ds"]].head(10)
-    )
-    mlflow.log_params(params)
-
-# configure predictions
-future_pd = model.make_future_dataframe(
-    periods=90,
-    freq='d',
-    include_history=True
-)
-
-# make predictions
-results_pd = model.predict(future_pd)
-
-# . . .
-
-# return predictions
-display(results_pd)
+bikes_per_station.display()
