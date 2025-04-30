@@ -1,12 +1,9 @@
 # Databricks notebook source
 
-from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
+from pyspark.sql import SparkSession
 
-from includes.utilities import (
-    get_json_schema,
-    get_table_name
-)
+from includes.utilities import get_json_schema, get_table_name
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -21,12 +18,12 @@ volume = dbutils.widgets.get("volume")
 checkpoint_volume_name = dbutils.widgets.get("checkpoint_volume_name")
 
 if not catalog or not schema or not volume or not checkpoint_volume_name:
-	raise ValueError("Catalog, Schema, and Volume must not be empty")
+    raise ValueError("Catalog, Schema, and Volume must not be empty")
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC # Create bronze table
-# MAGIC 
+# MAGIC
 # MAGIC Do streaming ingestion here
 
 # COMMAND ----------
@@ -34,9 +31,8 @@ if not catalog or not schema or not volume or not checkpoint_volume_name:
 # experiment with this...
 # spark.conf.set("spark.sql.shuffle.partitions", spark.sparkContext.defaultParallelism)
 
-bronze = (spark
-    .readStream
-    .format("cloudFiles")
+bronze = (
+    spark.readStream.format("cloudFiles")
     .option("cloudFiles.format", "json")
     .schema(get_json_schema())
     .load(f"/Volumes/{catalog}/{schema}/{volume}")
@@ -44,12 +40,14 @@ bronze = (spark
 )
 
 
-bronze_query = (bronze
-    .writeStream
-    .outputMode("append")
+bronze_query = (
+    bronze.writeStream.outputMode("append")
     .queryName("json_stream")
     .trigger(availableNow=True)
-    .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/bronze")
+    .option(
+        "checkpointLocation",
+        f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/bronze",
+    )
     .toTable(get_table_name(catalog, schema, "bronze"))
 )
 
@@ -64,14 +62,17 @@ bronze_query.awaitTermination()
 
 # COMMAND ----------
 
-date_length = len("2024-03-14T01-30-02") # skip trailing Z
+date_length = len("2024-03-14T01-30-02")  # skip trailing Z
 
-silver = (spark.readStream
-    .table(get_table_name(catalog, schema, "bronze"))
-    .withColumn("ts", F.to_timestamp(
-        F.substring("filename", 0, date_length), "yyyy-MM-dd'T'HH-mm-ss")
-	)
-	.withWatermark("ts", "1 hour")
+silver = (
+    spark.readStream.table(get_table_name(catalog, schema, "bronze"))
+    .withColumn(
+        "ts",
+        F.to_timestamp(
+            F.substring("filename", 0, date_length), "yyyy-MM-dd'T'HH-mm-ss"
+        ),
+    )
+    .withWatermark("ts", "1 hour")
     .withColumn("data", F.element_at("countries", 1))
     .withColumn("cities", F.col("data.cities"))
     .withColumn("data", F.element_at("cities", 1))
@@ -79,14 +80,14 @@ silver = (spark.readStream
     .withColumn("places", F.col("data.places"))
     .drop("data")
     .withColumn("places", F.explode("places"))
-    # next 2 lines remove random bikes left around 
-    .filter(F.col("places.spot") == F.lit(True)) 
+    # next 2 lines remove random bikes left around
+    .filter(F.col("places.spot") == F.lit(True))
     .filter(F.col("places.bike") == F.lit(False))
     .select("ts", "places")
     # truncate timestamp to minutes only
-    #.withColumn("ts", F.date_trunc("minute", F.col("ts")))
+    # .withColumn("ts", F.date_trunc("minute", F.col("ts")))
     # drop first few runs that are sometimes not at a ten-minute interval
-    #.filter(F.col("ts") >= "2024-03-12T12:00:00.000+00:00")
+    # .filter(F.col("ts") >= "2024-03-12T12:00:00.000+00:00")
     # extract the useful columns
     .withColumn("station_id", F.col("places.number"))
     .withColumn("bikes", F.col("places.bikes"))
@@ -96,20 +97,22 @@ silver = (spark.readStream
     .withColumn("lng", F.col("places.lng"))
     .drop("places")
     # fix timestamps to correspond to always XX:10:00 or XX:20:00 or so
-    .withColumn("ts",
-        F.expr("timestamp_seconds(floor(unix_timestamp(ts) / 600) * 600)")
+    .withColumn(
+        "ts", F.expr("timestamp_seconds(floor(unix_timestamp(ts) / 600) * 600)")
     )
     .dropDuplicates(["ts", "station_id"])
 )
 
-(silver
-    .writeStream
-    .outputMode("append")
+(
+    silver.writeStream.outputMode("append")
     .queryName("silver_stream")
     .trigger(availableNow=True)
-    .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/silver")
+    .option(
+        "checkpointLocation",
+        f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/silver",
+    )
     .toTable(get_table_name(catalog, schema, "silver"))
-	.awaitTermination()
+    .awaitTermination()
 )
 
 # station distances
@@ -122,8 +125,8 @@ silver = (spark.readStream
 
 # def dist(long_x, lat_x, long_y, lat_y):
 #     return F.acos(
-#         F.sin(F.radians(lat_x)) * F.sin(F.radians(lat_y)) + 
-#         F.cos(F.radians(lat_x)) * F.cos(F.radians(lat_y)) * 
+#         F.sin(F.radians(lat_x)) * F.sin(F.radians(lat_y)) +
+#         F.cos(F.radians(lat_x)) * F.cos(F.radians(lat_y)) *
 #             F.cos(F.radians(long_x) - F.radians(long_y))
 #     ) * F.lit(6371.0 * 1000)
 
@@ -166,7 +169,7 @@ silver = (spark.readStream
 # COMMAND ----------
 # MAGIC %md
 # MAGIC # Features
-# MAGIC 
+# MAGIC
 # MAGIC Compute the final features
 
 # COMMAND ----------
@@ -196,16 +199,12 @@ silver = (spark.readStream
 # )
 
 
-gold = (spark.read
-	.table(get_table_name(catalog, schema, "silver"))
+gold = (
+    spark.read.table(get_table_name(catalog, schema, "silver"))
     .groupBy("station_id", "ts")
-    .agg(
-        F.first("bikes").alias("bikes")
-    )
+    .agg(F.first("bikes").alias("bikes"))
 )
 
 gold.display()
 
-gold.write.mode("overwrite").saveAsTable(
-    get_table_name(catalog, schema, "gold")
-)
+gold.write.mode("overwrite").saveAsTable(get_table_name(catalog, schema, "gold"))

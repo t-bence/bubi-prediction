@@ -1,13 +1,11 @@
-
-
 def forecast_station_bikes(key: tuple, history_pd):
     """The function doing the training.
     Tuple `key` will contain the grouping key, `station_id`."""
     import mlflow
     import mlflow.prophet
-    from prophet import Prophet, serialize
-    from mlflow.models import infer_signature
     import pandas as pd
+    from mlflow.models import infer_signature
+    from prophet import Prophet, serialize
 
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(experiment_name)
@@ -17,8 +15,9 @@ def forecast_station_bikes(key: tuple, history_pd):
 
     def extract_params(pr_model):
         params = {attr: getattr(pr_model, attr) for attr in serialize.SIMPLE_ATTRIBUTES}
-        return {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))}
-
+        return {
+            k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))
+        }
 
     with mlflow.start_run() as run:
         model = Prophet()
@@ -28,8 +27,8 @@ def forecast_station_bikes(key: tuple, history_pd):
         params = extract_params(model)
 
         # Prepare future dataframe for prediction
-        future_date = pd.DataFrame({'ds': ['2025-02-13 12:00:00']})
-        future_date['ds'] = pd.to_datetime(future_date['ds'])
+        future_date = pd.DataFrame({"ds": ["2025-02-13 12:00:00"]})
+        future_date["ds"] = pd.to_datetime(future_date["ds"])
 
         # Predict
         forecast = model.predict(future_date)
@@ -40,19 +39,22 @@ def forecast_station_bikes(key: tuple, history_pd):
             model,
             artifact_path="prophet_model",
             signature=signature,
-            input_example=history_pd[["ds"]].head(10)
+            input_example=history_pd[["ds"]].head(10),
         )
         mlflow.log_params(params)
         mlflow.set_tag(key="station_id", value=station_id)
 
-        forecast_result = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
-        forecast_result.insert(0, 'station_id', station_id)
+        forecast_result = forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]]
+        forecast_result.insert(0, "station_id", station_id)
         return forecast_result
-    
-result_schema = 'station_id INTEGER, ds TIMESTAMP, yhat FLOAT, yhat_lower FLOAT, yhat_upper FLOAT'
 
-bikes_per_station = (gold_df
-    .selectExpr("ts AS ds", "bikes AS y", "station_id")
+
+result_schema = (
+    "station_id INTEGER, ds TIMESTAMP, yhat FLOAT, yhat_lower FLOAT, yhat_upper FLOAT"
+)
+
+bikes_per_station = (
+    gold_df.selectExpr("ts AS ds", "bikes AS y", "station_id")
     .groupBy("station_id")
     .applyInPandas(forecast_station_bikes, schema=result_schema)
     .sort("station_id")

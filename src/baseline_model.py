@@ -2,10 +2,7 @@
 from datetime import datetime
 import mlflow
 import mlflow.sklearn
-from mlflow.models import infer_signature
 from sklearn.dummy import DummyClassifier
-
-import pandas as pd
 
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
@@ -20,7 +17,7 @@ dbutils.widgets.text("experiment_name", "", "Experiment name")
 dbutils.widgets.text("station_id", "", "Station ID")
 dbutils.widgets.text("train_cutoff", "", "Train cutoff")
 dbutils.widgets.text("model_name", "", "Model name")
-
+dbutils.widgets.text("force_retrain", "False", "Force retrain")
 
 catalog = dbutils.widgets.get("catalog")
 schema = dbutils.widgets.get("schema")
@@ -28,6 +25,7 @@ experiment_name = dbutils.widgets.get("experiment_name")
 station_id = int(dbutils.widgets.get("station_id"))
 train_cutoff = datetime.fromisoformat(dbutils.widgets.get("train_cutoff"))
 model_name = dbutils.widgets.get("model_name")
+force_retrain = dbutils.widgets.get("force_retrain").lower() == "true"
 
 
 if not catalog or not schema or not experiment_name or not station_id or not train_cutoff or not model_name:
@@ -35,6 +33,27 @@ if not catalog or not schema or not experiment_name or not station_id or not tra
 
 
 mlflow.set_registry_uri("databricks-uc")
+
+client = mlflow.MlflowClient()
+
+model_fqn = f"{catalog}.{schema}.{model_name}"
+
+
+try:
+    baseline_model = client.get_model_version_by_alias(model_fqn, "Baseline")
+
+except Exception as e:
+    if "RESOURCE_DOES_NOT_EXIST" in e.message:
+        print('Baseline model does not exist. Creating a new one...')
+
+else:
+    if not force_retrain:
+        print('Baseline model already exists. Exiting...')
+        dbutils.notebook.exit(0)
+    
+    else:
+        print('Baseline model already exists. Retraining forced, continue...')
+
 
 # Load gold table
 gold_df = (spark
@@ -109,8 +128,6 @@ with mlflow.start_run() as run:
 
     print(test_mae)
 
-
-model_fqn = f"{catalog}.{schema}.{model_name}"
 
 model_details = mlflow.register_model(f"runs:/{run.info.run_id}/model", f"{model_fqn}")
 
