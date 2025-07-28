@@ -1,8 +1,9 @@
 import mlflow
 
+
 def get_latest_model_version(model_name: str) -> str:
-    versions = (mlflow.client.MlflowClient()
-        .search_model_versions(f"name='{model_name}'")
+    versions = mlflow.client.MlflowClient().search_model_versions(
+        f"name='{model_name}'"
     )
     # version is a str, convert it to int for finding the max,
     # but return the string!
