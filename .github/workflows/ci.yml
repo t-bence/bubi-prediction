@@ -36,3 +36,6 @@ jobs:
           source .venv/bin/activate
           pre-commit install
           pre-commit run --all-files
+
+      - name: Write requirements.txt
+        run: uv pip freeze > requirements.txt
