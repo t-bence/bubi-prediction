@@ -27,7 +27,7 @@ resources:
       environments:
         - environment_key: bubi_environment
           spec:
-            client: "2"
+            environment_version: "2"
             dependencies:
               - -r /Workspace/Users/toth.bence.mihaly@gmail.com/requirements.txt
       performance_target: PERFORMANCE_OPTIMIZED
