@@ -7,6 +7,7 @@ import pandas as pd
 import pyspark.sql.functions as F
 from mlflow.models import infer_signature
 from prophet import Prophet, serialize
+from pyspark import dbutils
 from pyspark.sql import SparkSession
 
 from includes.utilities import get_table_name

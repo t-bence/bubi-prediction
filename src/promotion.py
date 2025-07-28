@@ -1,6 +1,8 @@
 # Databricks notebook source
 
 import mlflow
+from mlflow.tracking import MlflowClient
+from pyspark.dbutils import dbutils
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder.getOrCreate()
@@ -28,7 +30,6 @@ mlflow.set_registry_uri("databricks-uc")
 # If this model performs better (has a better test_mean_absolute_error) than the Baseline,
 # register it and give it the Challenger label
 
-from mlflow.tracking import MlflowClient
 
 # Retrieve the test_mean_absolute_error metric from the run with "Baseline" alias
 client = MlflowClient()
@@ -37,7 +38,7 @@ model_fqn = f"{catalog}.{schema}.{model_name}"
 
 try:
     baseline_version = client.get_model_version_by_alias(model_fqn, "Baseline")
-except:
+except Exception:
     print("No Baseline found. Exiting.")
     dbutils.notebook.exit(1)
 
