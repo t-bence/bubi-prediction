@@ -12,10 +12,23 @@ resources:
 
       tasks:
         - task_key: ingestion
-          notebook_task:
-            notebook_path: ../src/data_processing.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.schema}
-              volume: ${var.volume}
-              checkpoint_volume_name: ${var.checkpoint_volume_name}
+          spark_python_task:
+            python_file: ../src/data_processing.py
+            parameters: 
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --volume
+              - ${var.volume}
+              - --checkpoint_volume
+              - ${var.checkpoint_volume}
+          environment_key: bubi_environment
+      queue:
+        enabled: true
+      environments:
+        - environment_key: bubi_environment
+          spec:
+            environment_version: "2"
+            dependencies:
+              - -r /Workspace/${workspace.root_path}/requirements.txt

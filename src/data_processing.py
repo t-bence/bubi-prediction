@@ -1,9 +1,4 @@
-# Databricks notebook source
-
-# MAGIC %pip install -r ../databricks-requirements.txt
-
-# COMMAND ----------
-
+import argparse
 import datetime as dt
 
 import pyspark.sql.functions as F
@@ -14,30 +9,24 @@ from includes.utilities import get_json_schema, get_table_name
 
 spark = SparkSession.builder.getOrCreate()
 
-# ruff: noqa: F821
-dbutils.widgets.text("catalog", "", "Catalog")
-dbutils.widgets.text("schema", "", "Schema")
-dbutils.widgets.text("volume", "", "Volume")
-dbutils.widgets.text("checkpoint_volume_name", "", "Checkpoint volume")
+parser = argparse.ArgumentParser(description="Data processing arguments")
+parser.add_argument("--catalog", type=str, default="", help="Catalog name")
+parser.add_argument("--schema", type=str, default="", help="Schema name")
+parser.add_argument("--volume", type=str, default="", help="Volume name")
+parser.add_argument(
+    "--checkpoint_volume", type=str, default="", help="Checkpoint volume name"
+)
+args, unknown = parser.parse_known_args()
 
-catalog = dbutils.widgets.get("catalog")
-schema = dbutils.widgets.get("schema")
-volume = dbutils.widgets.get("volume")
-checkpoint_volume_name = dbutils.widgets.get("checkpoint_volume_name")
+catalog = args.catalog
+schema = args.schema
+volume = args.volume
+checkpoint_volume = args.checkpoint_volume
 
-# ruff: enable
-
-if not catalog or not schema or not volume or not checkpoint_volume_name:
+if not catalog or not schema or not volume or not checkpoint_volume:
     raise ValueError("Catalog, Schema, and Volume must not be empty")
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC # Create bronze table
-# MAGIC
-# MAGIC Do streaming ingestion here
-
-# COMMAND ----------
-
+# Create bronze table
 # experiment with this...
 # spark.conf.set("spark.sql.shuffle.partitions", spark.sparkContext.defaultParallelism)
 
@@ -57,21 +46,16 @@ bronze_query = (
     .trigger(availableNow=True)
     .option(
         "checkpointLocation",
-        f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/bronze",
+        f"/Volumes/{catalog}/{schema}/{checkpoint_volume}/bronze",
     )
     .toTable(get_table_name(catalog, schema, "bronze"))
 )
 
 bronze_query.awaitTermination()
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC # Create silver table
-# MAGIC
-# MAGIC This will be a batch read now to simplify things
+# Create silver table
+# This will be a batch read now to simplify things
 
-
-# COMMAND ----------
 
 date_length = len("2024-03-14T01-30-02")  # skip trailing Z
 
@@ -94,10 +78,6 @@ silver = (
     .filter(F.col("places.spot") == F.lit(True))
     .filter(F.col("places.bike") == F.lit(False))
     .select("ts", "places")
-    # truncate timestamp to minutes only
-    # .withColumn("ts", F.date_trunc("minute", F.col("ts")))
-    # drop first few runs that are sometimes not at a ten-minute interval
-    # .filter(F.col("ts") >= "2024-03-12T12:00:00.000+00:00")
     # extract the useful columns
     .withColumn("station_id", F.col("places.number"))
     .withColumn("bikes", F.col("places.bikes"))
@@ -117,19 +97,14 @@ silver = (
     .trigger(availableNow=True)
     .option(
         "checkpointLocation",
-        f"/Volumes/{catalog}/{schema}/{checkpoint_volume_name}/silver",
+        f"/Volumes/{catalog}/{schema}/{checkpoint_volume}/silver",
     )
     .toTable(get_table_name(catalog, schema, "silver"))
     .awaitTermination()
 )
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC # Features
-# MAGIC
-# MAGIC Compute the final features
-
-# COMMAND ----------
+# Features
+# Compute the final features
 
 gold = (
     spark.read.table(get_table_name(catalog, schema, "silver"))

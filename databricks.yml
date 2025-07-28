@@ -13,7 +13,7 @@ variables:
   volume:
     default: landing
     description: Name of the volume that contains the files
-  checkpoint_volume_name:
+  checkpoint_volume:
     default: checkpoint
     description: Name of the volume used for streaming checkpoints
   experiment_name:
