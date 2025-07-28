@@ -1,5 +1,10 @@
 # Databricks notebook source
 
+# COMMAND ----------
+# MAGIC %pip install -r requirements.txt
+
+# COMMAND ----------
+
 import datetime as dt
 
 import pyspark.sql.functions as F

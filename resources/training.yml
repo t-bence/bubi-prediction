@@ -52,4 +52,3 @@ resources:
               catalog: ${var.catalog}
               schema: ${var.schema}
               model_name: ${var.model_name}
-        
