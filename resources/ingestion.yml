@@ -14,7 +14,7 @@ resources:
         - task_key: ingestion
           spark_python_task:
             python_file: ../src/data_processing.py
-            parameters: 
+            parameters:
               - --catalog
               - ${var.catalog}
               - --schema
