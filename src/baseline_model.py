@@ -114,11 +114,7 @@ with mlflow.start_run() as run:
         data=train_df,
         targets="y",
         model_type="regressor",
-        evaluator_config={
-            "log_model_explainability": False,
-            "metric_prefix": "train_",
-            "pos_label": 1,
-        },
+        evaluator_config={"log_model_explainability": False, "metric_prefix": "train_"},
     )
 
     # Log metrics for the test set
@@ -130,7 +126,6 @@ with mlflow.start_run() as run:
         evaluator_config={
             "log_model_explainability": False,
             "metric_prefix": "test_",
-            "pos_label": 1,
         },
     )
     test_mae = test_eval_result.metrics["test_mean_absolute_error"]
