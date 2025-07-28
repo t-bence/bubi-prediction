@@ -205,4 +205,6 @@ gold = (
     .agg(F.first("bikes").alias("bikes"))
 )
 
+gold.display()
+
 gold.write.mode("overwrite").saveAsTable(get_table_name(catalog, schema, "gold"))

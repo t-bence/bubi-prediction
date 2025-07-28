@@ -1,0 +1,21 @@
+# The main job for bubi_prediction.
+resources:
+  jobs:
+    ingestion:
+      name: Ingestion
+
+      trigger:
+        # Run this job every day, exactly one day from the last run; see https://docs.databricks.com/api/workspace/jobs/create#trigger
+        periodic:
+          interval: 1
+          unit: DAYS
+
+      tasks:
+        - task_key: ingestion
+          notebook_task:
+            notebook_path: ../src/data_processing.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+              checkpoint_volume_name: ${var.checkpoint_volume_name}
