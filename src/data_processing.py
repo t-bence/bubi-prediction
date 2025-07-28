@@ -36,7 +36,7 @@ bronze = (
     .schema(get_json_schema())
     .load(f"/Volumes/{catalog}/{schema}/{volume}")
     .withColumn("filename", F.col("_metadata.file_name"))
-    .withColumn("ingestion_time", dt.now())
+    .withColumn("ingestion_time", F.lit(dt.datetime.utcnow()))
 )
 
 
@@ -70,14 +70,14 @@ silver = (
     .withColumn("data", F.element_at("countries", 1))
     .withColumn("cities", F.col("data.cities"))
     .withColumn("data", F.element_at("cities", 1))
-    .select("ts", "data")
+    .select("ts", "data", "ingestion_time")
     .withColumn("places", F.col("data.places"))
     .drop("data")
     .withColumn("places", F.explode("places"))
     # next 2 lines remove random bikes left around
     .filter(F.col("places.spot") == F.lit(True))
     .filter(F.col("places.bike") == F.lit(False))
-    .select("ts", "places")
+    .select("ts", "places", "ingestion_time")
     # extract the useful columns
     .withColumn("station_id", F.col("places.number"))
     .withColumn("bikes", F.col("places.bikes"))
@@ -85,7 +85,7 @@ silver = (
     .withColumn("station_name", F.col("places.name"))
     .withColumn("lat", F.col("places.lat"))
     .withColumn("lng", F.col("places.lng"))
-    .drop("places")
+    .drop("places", "ingestion_time")  # ingestion_time is not used currently
     .transform(
         temporal_deduplication, column="ts", minutes=10, other_cols=["station_id"]
     )
