@@ -1,14 +1,12 @@
 # Databricks notebook source
 
-# COMMAND ----------
-# MAGIC %pip install -r databricks-requirements.txt
+# MAGIC %pip install -r ../databricks-requirements.txt
 
 # COMMAND ----------
 
 import datetime as dt
 
 import pyspark.sql.functions as F
-from pyspark.dbutils import dbutils
 from pyspark.sql import SparkSession
 
 from includes.data_processing import temporal_deduplication
@@ -16,7 +14,7 @@ from includes.utilities import get_json_schema, get_table_name
 
 spark = SparkSession.builder.getOrCreate()
 
-
+# ruff: noqa: F821
 dbutils.widgets.text("catalog", "", "Catalog")
 dbutils.widgets.text("schema", "", "Schema")
 dbutils.widgets.text("volume", "", "Volume")
@@ -26,6 +24,8 @@ catalog = dbutils.widgets.get("catalog")
 schema = dbutils.widgets.get("schema")
 volume = dbutils.widgets.get("volume")
 checkpoint_volume_name = dbutils.widgets.get("checkpoint_volume_name")
+
+# ruff: enable
 
 if not catalog or not schema or not volume or not checkpoint_volume_name:
     raise ValueError("Catalog, Schema, and Volume must not be empty")
