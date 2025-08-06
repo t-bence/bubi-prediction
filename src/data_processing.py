@@ -4,7 +4,7 @@ import datetime as dt
 import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 
-from includes.data_processing import temporal_deduplication
+from includes.data_processing import extract_json_fields, temporal_deduplication
 from includes.utilities import get_json_schema, get_table_name
 
 spark = SparkSession.builder.getOrCreate()
@@ -55,24 +55,10 @@ bronze_query.awaitTermination()
 
 # Create silver table
 
-DATE_FORMAT = "yyyy-MM-dd'T'HH-mm-ss'Z.json'"
 
 silver = (
     spark.readStream.table(get_table_name(catalog, schema, "bronze"))
-    .select(
-        F.to_timestamp("filename", DATE_FORMAT).alias("ts"),
-        F.explode(F.col("countries")[0].cities[0].places).alias("bikes"),
-    )
-    .filter(F.col("bikes.spot"))  # keep stations only, not bikes left around
-    .select(
-        F.col("places.number").alias("station_id"),
-        F.col("places.bikes").alias("bikes"),
-        F.col("places.maintenance").alias("maintenance"),
-        F.col("places.name").alias("station_name"),
-        F.col("places.lat").alias("lat"),
-        F.col("places.lng").alias("lng"),
-        "ts",
-    )
+    .transform(extract_json_fields)
     .transform(
         temporal_deduplication, column="ts", minutes=10, other_cols=["station_id"]
     )
