@@ -54,38 +54,25 @@ bronze_query = (
 bronze_query.awaitTermination()
 
 # Create silver table
-# This will be a batch read now to simplify things
 
-
-date_length = len("2024-03-14T01-30-02")  # skip trailing Z
+DATE_FORMAT = "yyyy-MM-dd'T'HH-mm-ss'Z.json'"
 
 silver = (
     spark.readStream.table(get_table_name(catalog, schema, "bronze"))
-    .withColumn(
-        "ts",
-        F.to_timestamp(
-            F.substring("filename", 0, date_length), "yyyy-MM-dd'T'HH-mm-ss"
-        ),
+    .select(
+        F.to_timestamp("filename", DATE_FORMAT).alias("ts"),
+        F.explode(F.col("countries")[0].cities[0].places).alias("bikes"),
     )
-    .withColumn("data", F.element_at("countries", 1))
-    .withColumn("cities", F.col("data.cities"))
-    .withColumn("data", F.element_at("cities", 1))
-    .select("ts", "data", "ingestion_time")
-    .withColumn("places", F.col("data.places"))
-    .drop("data")
-    .withColumn("places", F.explode("places"))
-    # next 2 lines remove random bikes left around
-    .filter(F.col("places.spot") == F.lit(True))
-    .filter(F.col("places.bike") == F.lit(False))
-    .select("ts", "places", "ingestion_time")
-    # extract the useful columns
-    .withColumn("station_id", F.col("places.number"))
-    .withColumn("bikes", F.col("places.bikes"))
-    .withColumn("maintenance", F.col("places.maintenance"))
-    .withColumn("station_name", F.col("places.name"))
-    .withColumn("lat", F.col("places.lat"))
-    .withColumn("lng", F.col("places.lng"))
-    .drop("places", "ingestion_time")  # ingestion_time is not used currently
+    .filter(F.col("bikes.spot"))  # keep stations only, not bikes left around
+    .select(
+        F.col("places.number").alias("station_id"),
+        F.col("places.bikes").alias("bikes"),
+        F.col("places.maintenance").alias("maintenance"),
+        F.col("places.name").alias("station_name"),
+        F.col("places.lat").alias("lat"),
+        F.col("places.lng").alias("lng"),
+        "ts",
+    )
     .transform(
         temporal_deduplication, column="ts", minutes=10, other_cols=["station_id"]
     )
