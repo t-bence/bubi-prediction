@@ -1,46 +1,46 @@
-# Databricks notebook source
+import argparse
+import logging
 from datetime import datetime
 
 import mlflow
-import mlflow.sklearn
 import pyspark.sql.functions as F
-from pyspark.dbutils import dbutils
+from mlflow.models import infer_signature
 from pyspark.sql import SparkSession
-from sklearn.dummy import DummyClassifier
+from sklearn.dummy import DummyRegressor
+from sklearn.metrics import mean_absolute_error
 
 from includes.utilities import get_table_name
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
 spark = SparkSession.builder.getOrCreate()
 
-dbutils.widgets.text("catalog", "", "Catalog")
-dbutils.widgets.text("schema", "", "Schema")
-dbutils.widgets.text("experiment_name", "", "Experiment name")
-dbutils.widgets.text("station_id", "", "Station ID")
-dbutils.widgets.text("train_cutoff", "", "Train cutoff")
-dbutils.widgets.text("model_name", "", "Model name")
-dbutils.widgets.text("force_retrain", "False", "Force retrain")
+parser = argparse.ArgumentParser(description="Baseline model training arguments")
+parser.add_argument("--catalog", type=str, required=True, help="Catalog name")
+parser.add_argument("--schema", type=str, required=True, help="Schema name")
+parser.add_argument(
+    "--experiment_name", type=str, required=True, help="Experiment name"
+)
+parser.add_argument("--station_id", type=int, required=True, help="Station ID")
+parser.add_argument(
+    "--train_cutoff", type=str, required=True, help="Train cutoff (ISO format)"
+)
+parser.add_argument("--model_name", type=str, required=True, help="Model name")
+parser.add_argument("--force_retrain", action="store_true", help="Force retrain")
+args = parser.parse_args()
 
-catalog = dbutils.widgets.get("catalog")
-schema = dbutils.widgets.get("schema")
-experiment_name = dbutils.widgets.get("experiment_name")
-station_id = int(dbutils.widgets.get("station_id"))
-train_cutoff = datetime.fromisoformat(dbutils.widgets.get("train_cutoff"))
-model_name = dbutils.widgets.get("model_name")
-force_retrain = dbutils.widgets.get("force_retrain").lower() == "true"
+catalog = args.catalog
+schema = args.schema
+experiment_name = args.experiment_name
+station_id = args.station_id
+train_cutoff = datetime.fromisoformat(args.train_cutoff)
+model_name = args.model_name
+force_retrain = args.force_retrain
 
-
-if (
-    not catalog
-    or not schema
-    or not experiment_name
-    or not station_id
-    or not train_cutoff
-    or not model_name
-):
-    raise ValueError("None of the parameters may be empty")
-
-
-mlflow.set_registry_uri("databricks-uc")
 
 client = mlflow.MlflowClient()
 
@@ -52,41 +52,35 @@ try:
 
 except Exception as e:
     if "RESOURCE_DOES_NOT_EXIST" in e.message:
-        print("Baseline model does not exist. Creating a new one...")
+        logger.info("Baseline model does not exist. Creating a new one...")
 
 else:
     if not force_retrain:
-        print("Baseline model already exists. Exiting...")
-        dbutils.notebook.exit(0)
+        logger.info("Baseline model already exists. Exiting...")
+        import sys
+
+        sys.exit(0)
 
     else:
-        print("Baseline model already exists. Retraining forced, continue...")
+        logger.info("Baseline model already exists. Retraining forced, continue...")
 
 
 # Load gold table
-gold_df = (
-    spark.read.table(get_table_name(catalog, schema, "gold"))
-    .filter(F.col("station_id") == int(station_id))
-    .selectExpr("ts AS ds", "bikes AS y")
+gold_df = spark.read.table(get_table_name(catalog, schema, "gold")).filter(
+    F.col("station_id") == int(station_id)
 )
 
-train_df = gold_df.filter(F.col("ds") <= train_cutoff).toPandas()
+train_df = gold_df.filter(F.col("ts") <= train_cutoff).toPandas()
 
-test_df = gold_df.filter(F.col("ds") > train_cutoff).toPandas()
+logger.info(f"Number of rows in training set: {train_df.shape[0]}")
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC # Training
-# MAGIC
-# MAGIC Train a model to predict the number of bikes.
-# MAGIC Currently, a Prophet model is trained that can only take into account the time series,
-# MAGIC or features that are **known into the future**. So I will not use the other bike numbers.
-# MAGIC
-# MAGIC Main source: <https://www.databricks.com/blog/2020/01/27/time-series-forecasting-prophet-spark.html>
-# MAGIC
-# MAGIC Let's train for one station only first
+test_df = gold_df.filter(F.col("ts") > train_cutoff).toPandas()
 
-# COMMAND ----------
+logger.info(f"Number of rows in test set: {test_df.shape[0]}")
+
+
+# Train a dummy model that predicts the average of bikes
+
 
 mlflow.end_run()
 
@@ -97,47 +91,49 @@ mlflow.autolog(disable=True)
 with mlflow.start_run() as run:
     mlflow.sklearn.autolog(False)
 
-    train_X = train_df[["ds"]]
-    train_y = train_df["y"]
+    train_X = train_df[["ts"]]
+    train_y = train_df["bikes"]
 
-    mean_bikes = round(train_y.mean())
+    model = DummyRegressor(strategy="mean").fit(train_X, train_y)
 
-    model = DummyClassifier(strategy="constant", constant=mean_bikes).fit(
-        train_X, train_y
-    )
+    signature = infer_signature(train_X, model.predict(train_X))
 
-    mlflow_model = mlflow.models.Model()
-    mlflow.pyfunc.add_to_model(mlflow_model, loader_module="mlflow.sklearn")
-    pyfunc_model = mlflow.pyfunc.PyFuncModel(model_meta=mlflow_model, model_impl=model)
-    training_eval_result = mlflow.evaluate(
-        model=pyfunc_model,
-        data=train_df,
-        targets="y",
-        model_type="regressor",
-        evaluator_config={"log_model_explainability": False, "metric_prefix": "train_"},
-    )
+    mlflow.sklearn.log_model(model, "model", signature=signature)
 
-    # Log metrics for the test set
-    test_eval_result = mlflow.evaluate(
-        model=pyfunc_model,
-        data=test_df,
-        targets="y",
-        model_type="regressor",
-        evaluator_config={
-            "log_model_explainability": False,
-            "metric_prefix": "test_",
-        },
-    )
-    test_mae = test_eval_result.metrics["test_mean_absolute_error"]
+    train_mae = mean_absolute_error(train_y, model.predict(train_X))
+    mlflow.log_metric("train_mae", train_mae)
+    logger.info(f"Train MAE: {round(train_mae, 2)}")
 
-    print(test_mae)
+    test_X = test_df[["ts"]]
+    test_y = test_df["bikes"]
+    test_pred = model.predict(test_X)
+    test_mae = mean_absolute_error(test_y, test_pred)
+
+    mlflow.log_metric("test_mae", test_mae)
+
+    logger.info(f"Test MAE: {round(test_mae, 2)}")
 
 
 model_details = mlflow.register_model(f"runs:/{run.info.run_id}/model", f"{model_fqn}")
 
-# COMMAND ----------
+client = mlflow.client.MlflowClient()
 
 # Set this version as the Baseline model, using its model alias
-mlflow.client.MlflowClient().set_registered_model_alias(
+client.set_registered_model_alias(
     name=model_fqn, alias="Baseline", version=model_details.version
+)
+
+# set MAE as tag
+client.set_model_version_tag(
+    name=model_fqn,
+    version=model_details.version,
+    key="test_mae",
+    value=str(round(test_mae, 2)),
+)
+
+client.set_model_version_tag(
+    name=model_fqn,
+    version=model_details.version,
+    key="type",
+    value="dummy",
 )

@@ -11,50 +11,69 @@ resources:
 
       tasks:
         - task_key: baseline
-          notebook_task:
-            notebook_path: ../src/baseline_model.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.schema}
-              train_cutoff: ${var.train_cutoff}
-              station_id: ${var.station_id}
-              experiment_name: ${var.experiment_name}
-              model_name: ${var.model_name}
-              force_retrain: "False"
+          spark_python_task:
+            python_file: ../src/baseline_model.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --train_cutoff
+              - ${var.train_cutoff}
+              - --station_id
+              - ${var.station_id}
+              - --experiment_name
+              - ${var.experiment_name}
+              - --model_name
+              - ${var.model_name}
+              - --force_retrain
           environment_key: bubi_environment
         - task_key: training
           depends_on:
             - task_key: baseline
-          notebook_task:
-            notebook_path: ../src/training.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.schema}
-              train_cutoff: ${var.train_cutoff}
-              station_id: ${var.station_id}
-              experiment_name: ${var.experiment_name}
-              model_name: ${var.model_name}
+          spark_python_task:
+            python_file: ../src/training.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --train_cutoff
+              - ${var.train_cutoff}
+              - --station_id
+              - ${var.station_id}
+              - --experiment_name
+              - ${var.experiment_name}
+              - --model_name
+              - ${var.model_name}
           environment_key: bubi_environment
         - task_key: promotion
           depends_on:
             - task_key: training
-          notebook_task:
-            notebook_path: ../src/promotion.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.schema}
-              model_name: ${var.model_name}
-              previous_run_id: "{{tasks.training.values.previous_run_id}}"
+          spark_python_task:
+            python_file: ../src/promotion.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --model_name
+              - ${var.model_name}
+              - --experiment_name
+              - ${var.experiment_name}
           environment_key: bubi_environment
         - task_key: challenger_validation
           depends_on:
             - task_key: promotion
-          notebook_task:
-            notebook_path: ../src/challenger_validation.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.schema}
-              model_name: ${var.model_name}
+          spark_python_task:
+            python_file: ../src/challenger_validation.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --model_name
+              - ${var.model_name}
           environment_key: bubi_environment
       environments:
         - environment_key: bubi_environment

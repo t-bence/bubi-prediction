@@ -1,21 +1,24 @@
-# Databricks notebook source
+import argparse
+
 import mlflow
 import pyspark.sql.functions as F
 from mlflow.tracking import MlflowClient
-from pyspark.dbutils import dbutils
 from pyspark.sql import SparkSession
 
 from includes.utilities import get_table_name
 
 spark = SparkSession.builder.getOrCreate()
 
-dbutils.widgets.text("catalog", "", "Catalog")
-dbutils.widgets.text("schema", "", "Schema")
-dbutils.widgets.text("model_name", "", "Model name")
 
-catalog = dbutils.widgets.get("catalog")
-schema = dbutils.widgets.get("schema")
-model_name = dbutils.widgets.get("model_name")
+parser = argparse.ArgumentParser(description="Challenger validation arguments")
+parser.add_argument("--catalog", type=str, required=True, help="Catalog name")
+parser.add_argument("--schema", type=str, required=True, help="Schema name")
+parser.add_argument("--model_name", type=str, required=True, help="Model name")
+args = parser.parse_args()
+
+catalog = args.catalog
+schema = args.schema
+model_name = args.model_name
 
 
 if not catalog or not schema or not model_name:
@@ -38,7 +41,9 @@ try:
     challenger_version = client.get_model_version_by_alias(model_fqn, "Challenger")
 except Exception:
     print("No Challenger version exists")
-    dbutils.notebook.exit(0)
+    import sys
+
+    sys.exit(0)
 
 challenger_run = client.get_run(challenger_version.run_id)
 challenger_mae = challenger_run.data.metrics.get("test_mean_absolute_error")
@@ -73,7 +78,7 @@ client.set_model_version_tag(
 # determine if the challenger model can make predictions
 try:
     model_uri = f"models:/{model_name}@Challenger"
-    challenger_model = mlflow.pyfunc.load_model(spark, model_uri)
+    challenger_model = mlflow.pyfunc.spark_udf(spark, model_uri)
 
     validation_df = (
         spark.read.table(get_table_name(catalog, schema, "gold")).select(
@@ -86,7 +91,7 @@ try:
         "prediction", challenger_model(F.struct(feature_columns))
     )
 
-    preds.display()
+    preds.show()
 
     can_predict = True
 
