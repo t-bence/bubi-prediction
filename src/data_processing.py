@@ -1,11 +1,17 @@
 import argparse
 import datetime as dt
+import logging
 
 import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 
 from includes.data_processing import extract_json_fields, temporal_deduplication
 from includes.utilities import get_json_schema, get_table_name
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -24,7 +30,13 @@ volume = args.volume
 checkpoint_volume = args.checkpoint_volume
 
 if not catalog or not schema or not volume or not checkpoint_volume:
+    logger.error("Catalog, Schema, and Volume must not be empty")
     raise ValueError("Catalog, Schema, and Volume must not be empty")
+
+logger.info("Starting data processing script")
+logger.info(
+    f"Using catalog={catalog}, schema={schema}, volume={volume}, checkpoint_volume={checkpoint_volume}"
+)
 
 # Create bronze table
 # experiment with this...
@@ -53,6 +65,9 @@ bronze_query = (
 
 bronze_query.awaitTermination()
 
+logger.info("Bronze table stream started")
+logger.info("Bronze query completed")
+
 # Create silver table
 
 
@@ -64,6 +79,8 @@ silver = (
 
 (silver.write.mode("overwrite").saveAsTable(get_table_name(catalog, schema, "silver")))
 
+logger.info("Silver table created")
+
 # Features
 # Compute the final features
 
@@ -74,3 +91,5 @@ gold = (
 )
 
 gold.write.mode("overwrite").saveAsTable(get_table_name(catalog, schema, "gold"))
+
+logger.info("Gold table created")

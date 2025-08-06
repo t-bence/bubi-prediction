@@ -30,5 +30,3 @@ resources:
         - environment_key: bubi_environment
           spec:
             environment_version: "2"
-            dependencies:
-              - -r ${workspace.root_path}/files/databricks-requirements.txt
