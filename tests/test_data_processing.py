@@ -11,7 +11,7 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from includes.data_processing import extract_json_fields
+from includes.data_processing import extract_json_fields, temporal_deduplication
 
 
 def test_json_processing() -> None:
@@ -57,3 +57,36 @@ def test_json_processing() -> None:
     from pandas.testing import assert_frame_equal
 
     assert_frame_equal(result.toPandas(), expected.toPandas())
+
+
+def test_temporal_deduplication():
+    schema = StructType(
+        [
+            StructField("ts", TimestampType(), True),
+            StructField("station_id", LongType(), True),
+            StructField("bikes", LongType(), True),
+        ]
+    )
+
+    data = [
+        (
+            datetime(2024, 3, 13, 2, 40, 0),
+            1,
+            1,
+        ),
+        (
+            datetime(2024, 3, 13, 2, 50, 0),
+            1,
+            2,
+        ),
+        (
+            datetime(2024, 3, 13, 2, 55, 0),
+            1,
+            2,
+        ),
+    ]
+    spark = SparkSession.builder.getOrCreate()
+
+    df = spark.createDataFrame(data, schema)
+
+    assert df.transform(temporal_deduplication).count() == 2

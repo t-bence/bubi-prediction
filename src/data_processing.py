@@ -57,24 +57,12 @@ bronze_query.awaitTermination()
 
 
 silver = (
-    spark.readStream.table(get_table_name(catalog, schema, "bronze"))
+    spark.read.table(get_table_name(catalog, schema, "bronze"))
     .transform(extract_json_fields)
-    .transform(
-        temporal_deduplication, column="ts", minutes=10, other_cols=["station_id"]
-    )
+    .transform(temporal_deduplication)
 )
 
-(
-    silver.writeStream.outputMode("append")
-    .queryName("silver_stream")
-    .trigger(availableNow=True)
-    .option(
-        "checkpointLocation",
-        f"/Volumes/{catalog}/{schema}/{checkpoint_volume}/silver",
-    )
-    .toTable(get_table_name(catalog, schema, "silver"))
-    .awaitTermination()
-)
+(silver.write.mode("overwrite").saveAsTable(get_table_name(catalog, schema, "silver")))
 
 # Features
 # Compute the final features
