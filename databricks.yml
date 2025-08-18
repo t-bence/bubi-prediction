@@ -26,7 +26,7 @@ variables:
     default: 2100
     description: Station ID to train models for. Default is Krisztina square (2100)
   train_cutoff:
-    default: "2024-03-12:23:30.000"
+    default: "2025-08-01:00:00.000"
     description: The date and time when the training data ends and test data begins
 
 include:

@@ -2,6 +2,21 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 
+def extract_timestamp_from_filename(filename_col: F.col) -> F.col:
+    """
+    Extracts timestamp from filename supporting two formats:
+    - "yyyy-MM-dd'T'HH-mm-ss'Z.json'"
+    - "yyyy-MM-dd'T'HH:mm:ss'Z.json'"
+    """
+    # Try parsing with dash format first, then colon format
+    dash_format = "yyyy-MM-dd'T'HH-mm-ss'Z.json'"
+    colon_format = "yyyy-MM-dd'T'HH:mm:ss'Z.json'"
+    return F.coalesce(
+        F.try_to_timestamp(filename_col, F.lit(dash_format)),
+        F.to_timestamp(filename_col, colon_format),  # fail if none work
+    ).alias("ts")
+
+
 def extract_json_fields(df: DataFrame) -> DataFrame:
     """
     Extracts relevant fields from a nested JSON structure in a Spark DataFrame.
@@ -27,11 +42,9 @@ def extract_json_fields(df: DataFrame) -> DataFrame:
             - ts (timestamp): Parsed timestamp from the filename.
     """
 
-    DATE_FORMAT = "yyyy-MM-dd'T'HH-mm-ss'Z.json'"
-
     return (
         df.select(
-            F.to_timestamp("filename", DATE_FORMAT).alias("ts"),
+            extract_timestamp_from_filename(F.col("filename")),
             F.explode(F.col("countries")[0].cities[0].places).alias("places"),
         )
         .filter(F.col("places.spot"))  # keep stations only, not bikes left around

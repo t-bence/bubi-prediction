@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
     BooleanType,
@@ -11,11 +12,35 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from includes.data_processing import extract_json_fields, temporal_deduplication
+from includes.data_processing import (
+    extract_json_fields,
+    extract_timestamp_from_filename,
+    temporal_deduplication,
+)
 
 
-def test_json_processing() -> None:
-    spark = SparkSession.builder.getOrCreate()
+@pytest.fixture(scope="session")
+def spark():
+    return SparkSession.builder.getOrCreate()
+
+
+def test_extract_timestamp_from_filename(spark):
+    from datetime import datetime
+
+    import pyspark.sql.functions as F
+    from pyspark.sql import Row
+
+    # Test dash format
+    dash_row = Row(filename="2024-03-13T02-50-00Z.json")
+    # Test colon format
+    colon_row = Row(filename="2024-03-13T02:50:00Z.json")
+    df = spark.createDataFrame([dash_row, colon_row])
+    result = df.select(extract_timestamp_from_filename(F.col("filename"))).collect()
+    expected = [datetime(2024, 3, 13, 2, 50, 0), datetime(2024, 3, 13, 2, 50, 0)]
+    assert [row.ts for row in result] == expected
+
+
+def test_json_processing(spark) -> None:
     df = spark.read.json("./tests/files/bronze_sample_row.json")
     result = df.transform(extract_json_fields).limit(2)
 
@@ -59,7 +84,7 @@ def test_json_processing() -> None:
     assert_frame_equal(result.toPandas(), expected.toPandas())
 
 
-def test_temporal_deduplication():
+def test_temporal_deduplication(spark):
     schema = StructType(
         [
             StructField("ts", TimestampType(), True),
@@ -85,8 +110,5 @@ def test_temporal_deduplication():
             2,
         ),
     ]
-    spark = SparkSession.builder.getOrCreate()
-
     df = spark.createDataFrame(data, schema)
-
     assert df.transform(temporal_deduplication).count() == 2
