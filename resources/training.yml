@@ -26,7 +26,6 @@ resources:
               - ${var.experiment_name}
               - --model_name
               - ${var.model_name}
-              - --force_retrain
           environment_key: bubi_environment
         - task_key: training
           depends_on:
@@ -61,6 +60,8 @@ resources:
               - ${var.model_name}
               - --experiment_name
               - ${var.experiment_name}
+              - --target
+              - ${bundle.target}
           environment_key: bubi_environment
         - task_key: challenger_validation
           depends_on:

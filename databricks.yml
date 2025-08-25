@@ -36,11 +36,6 @@ resources:
   experiments:
     model_experiment:
       name: ${var.experiment_name}
-  registered_models:
-    model:
-      catalog_name: ${var.catalog}
-      schema_name: ${var.schema}
-      name: ${var.model_name}
 
 
 targets:
@@ -53,6 +48,11 @@ targets:
     default: true
     workspace:
       host: https://dbc-1bff540e-abbc.cloud.databricks.com/
+
+    variables:
+      train_cutoff:
+        default: "2024-03-13:00:00.000"
+        description: "Overriding the train test cutoff here for the sample data"
 
   prod:
     mode: production

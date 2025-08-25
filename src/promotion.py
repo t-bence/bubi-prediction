@@ -6,18 +6,17 @@ from mlflow.tracking import MlflowClient
 
 
 def run_promotion(
-    catalog: str, schema: str, model_name: str, experiment_name: str
+    catalog: str, schema: str, model_name: str, experiment_name: str, target: str
 ) -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
     logger = logging.getLogger(__name__)
-    if not catalog or not schema or not model_name or not experiment_name:
-        logger.warning("None of the parameters may be empty. Exiting early.")
-        return
+
     mlflow.set_registry_uri("databricks-uc")
     client = MlflowClient()
     model_fqn = f"{catalog}.{schema}.{model_name}"
+
     try:
         baseline_version = client.get_model_version_by_alias(model_fqn, "Baseline")
     except Exception:
@@ -39,6 +38,12 @@ def run_promotion(
         client.set_registered_model_alias(
             name=model_fqn, version=version.version, alias="Challenger"
         )
+    elif target.startswith("dev"):
+        logger.info("Target starts with 'dev', so registering the model")
+        version = mlflow.register_model(f"runs:/{run.info.run_id}/model", model_fqn)
+        client.set_registered_model_alias(
+            name=model_fqn, version=version.version, alias="Challenger"
+        )
     else:
         logger.info(
             "Test MAE is > than baseline MAE, so we are not registering the model"
@@ -53,5 +58,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--experiment_name", type=str, required=True, help="Experiment name"
     )
+    parser.add_argument("--target", type=str, required=True, help="Environment name")
     args = parser.parse_args()
-    run_promotion(args.catalog, args.schema, args.model_name, args.experiment_name)
+    run_promotion(
+        args.catalog, args.schema, args.model_name, args.experiment_name, args.target
+    )

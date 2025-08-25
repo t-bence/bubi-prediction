@@ -9,7 +9,7 @@ from pyspark.sql import SparkSession
 from sklearn.dummy import DummyRegressor
 from sklearn.metrics import mean_absolute_error
 
-from includes.utilities import get_table_name
+from includes.utilities import get_table_name, model_version_with_alias_exists
 
 
 def run_baseline(
@@ -28,20 +28,15 @@ def run_baseline(
     spark = SparkSession.builder.getOrCreate()
     client = mlflow.MlflowClient()
     model_fqn = f"{catalog}.{schema}.{model_name}"
-    try:
-        client.get_model_version_by_alias(model_fqn, "Baseline")
-    except Exception as e:
-        if hasattr(e, "message") and "RESOURCE_DOES_NOT_EXIST" in e.message:
-            logger.info("Baseline model does not exist. Creating a new one...")
-        else:
-            logger.warning(f"Unexpected error: {e}")
-            return
+
+    if not model_version_with_alias_exists(model_fqn, "Baseline"):
+        logger.info("Baseline model does not exist. Creating a new one...")
+    elif force_retrain:
+        logger.info("Baseline model already exists. Retraining forced, continue...")
     else:
-        if not force_retrain:
-            logger.info("Baseline model already exists. Exiting...")
-            return
-        else:
-            logger.info("Baseline model already exists. Retraining forced, continue...")
+        logger.info("Baseline model already exists. Exiting...")
+        return
+
     gold_df = spark.read.table(get_table_name(catalog, schema, "gold")).filter(
         F.col("station_id") == int(station_id)
     )

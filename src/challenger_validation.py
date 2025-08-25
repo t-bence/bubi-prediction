@@ -15,9 +15,7 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
     )
     logger = logging.getLogger(__name__)
     spark = SparkSession.builder.getOrCreate()
-    if not catalog or not schema or not model_name:
-        logger.warning("None of the parameters may be empty. Exiting early.")
-        return
+
     mlflow.set_registry_uri("databricks-uc")
     client = MlflowClient()
     model_fqn = f"{catalog}.{schema}.{model_name}"

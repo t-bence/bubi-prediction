@@ -1,3 +1,6 @@
+from typing import Union
+
+import mlflow
 from pyspark.sql.types import (
     ArrayType,
     BooleanType,
@@ -7,6 +10,34 @@ from pyspark.sql.types import (
     StructField,
     StructType,
 )
+
+
+def model_version_with_alias_exists(
+    model_fqn: str, alias: str
+) -> Union[mlflow.tracking.ModelVersion, None]:
+    """
+    Checks if a model version with the specified alias exists in the MLflow Model Registry.
+
+    Args:
+        model_fqn (str): The fully qualified name of the model.
+        alias (str): The alias of the model version to check.
+
+    Returns:
+        bool: Whether a model version with the specified alias exists
+    """
+
+    mlflow.set_registry_uri("databricks-uc")
+
+    client = mlflow.MlflowClient()
+    try:
+        client.get_model_version_by_alias(model_fqn, alias)
+    except Exception as e:
+        if hasattr(e, "message") and "RESOURCE_DOES_NOT_EXIST" in e.message:
+            return False
+        else:
+            raise e
+    else:
+        return True
 
 
 def get_json_schema():
