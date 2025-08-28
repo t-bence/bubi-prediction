@@ -57,7 +57,7 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
         preds = validation_df.withColumn(
             "prediction", challenger_model(F.struct(feature_columns))
         )
-        preds.show()
+        logger.info(preds.show())
         can_predict = True
     except Exception as e:
         logger.info("Unable to predict on features.")

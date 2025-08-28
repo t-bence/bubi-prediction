@@ -51,6 +51,7 @@ bronze = (
     .withColumn("ingestion_time", F.lit(dt.datetime.utcnow()))
 )
 
+logger.info("Bronze table stream started")
 
 bronze_query = (
     bronze.writeStream.outputMode("append")
@@ -65,12 +66,13 @@ bronze_query = (
 
 bronze_query.awaitTermination()
 
-logger.info("Bronze table stream started")
 logger.info("Bronze query completed")
+logger.info(
+    f"Bronze query has written {bronze_query.lastProgress['numInputRows']} rows"
+)
+
 
 # Create silver table
-
-
 silver = (
     spark.read.table(get_table_name(catalog, schema, "bronze"))
     .transform(extract_json_fields)

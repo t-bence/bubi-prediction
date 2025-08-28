@@ -1,5 +1,3 @@
-from typing import Union
-
 import mlflow
 from pyspark.sql.types import (
     ArrayType,
@@ -12,9 +10,7 @@ from pyspark.sql.types import (
 )
 
 
-def model_version_with_alias_exists(
-    model_fqn: str, alias: str
-) -> Union[mlflow.tracking.ModelVersion, None]:
+def model_version_with_alias_exists(model_fqn: str, alias: str) -> bool:
     """
     Checks if a model version with the specified alias exists in the MLflow Model Registry.
 
