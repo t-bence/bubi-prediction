@@ -1,17 +1,15 @@
 import argparse
-import logging
 
 import mlflow
 from mlflow.tracking import MlflowClient
+
+from includes.utilities import configure_logger
 
 
 def run_promotion(
     catalog: str, schema: str, model_name: str, experiment_name: str, target: str
 ) -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-    logger = logging.getLogger(__name__)
+    logger = configure_logger()
 
     mlflow.set_registry_uri("databricks-uc")
     client = MlflowClient()

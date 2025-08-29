@@ -1,3 +1,5 @@
+import logging
+
 import mlflow
 from pyspark.sql.types import (
     ArrayType,
@@ -8,6 +10,18 @@ from pyspark.sql.types import (
     StructField,
     StructType,
 )
+
+
+def configure_logger() -> logging.Logger:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+    logging.getLogger("py4j").setLevel(logging.WARN)
+    logging.getLogger("org.apache").setLevel(logging.WARN)
+    logging.getLogger("databricks").setLevel(logging.WARN)
+    logger = logging.getLogger(__name__)
+    return logger
 
 
 def model_version_with_alias_exists(model_fqn: str, alias: str) -> bool:

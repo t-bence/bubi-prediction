@@ -1,5 +1,4 @@
 import argparse
-import logging
 from datetime import datetime
 
 import mlflow
@@ -11,7 +10,7 @@ from prophet import Prophet, serialize
 from pyspark.sql import SparkSession
 from sklearn.metrics import mean_absolute_error
 
-from includes.utilities import get_table_name
+from includes.utilities import configure_logger, get_table_name
 
 
 def run_training(
@@ -22,11 +21,9 @@ def run_training(
     train_cutoff: datetime,
     model_name: str,
 ) -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-    logger = logging.getLogger(__name__)
     spark = SparkSession.builder.getOrCreate()
+
+    logger = configure_logger()
 
     logger.info(
         f"Parameters: catalog={catalog}, schema={schema}, experiment_name={experiment_name}, "

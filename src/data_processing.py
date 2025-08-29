@@ -1,19 +1,15 @@
 import argparse
 import datetime as dt
-import logging
 
 import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
 
 from includes.data_processing import extract_json_fields, temporal_deduplication
-from includes.utilities import get_json_schema, get_table_name
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+from includes.utilities import configure_logger, get_json_schema, get_table_name
 
 spark = SparkSession.builder.getOrCreate()
+
+logger = configure_logger()
 
 parser = argparse.ArgumentParser(description="Data processing arguments")
 parser.add_argument("--catalog", type=str, default="", help="Catalog name")
@@ -48,7 +44,7 @@ bronze = (
     .schema(get_json_schema())
     .load(f"/Volumes/{catalog}/{schema}/{volume}")
     .withColumn("filename", F.col("_metadata.file_name"))
-    .withColumn("ingestion_time", F.lit(dt.datetime.utcnow()))
+    .withColumn("ingestion_time", F.lit(dt.datetime.now(dt.UTC)))
 )
 
 logger.info("Bronze table stream started")

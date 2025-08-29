@@ -1,5 +1,4 @@
 import argparse
-import logging
 from datetime import datetime
 
 import mlflow
@@ -9,7 +8,11 @@ from pyspark.sql import SparkSession
 from sklearn.dummy import DummyRegressor
 from sklearn.metrics import mean_absolute_error
 
-from includes.utilities import get_table_name, model_version_with_alias_exists
+from includes.utilities import (
+    configure_logger,
+    get_table_name,
+    model_version_with_alias_exists,
+)
 
 
 def run_baseline(
@@ -21,10 +24,8 @@ def run_baseline(
     model_name: str,
     force_retrain: bool,
 ) -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-    logger = logging.getLogger(__name__)
+    logger = configure_logger()
+
     spark = SparkSession.builder.getOrCreate()
     client = mlflow.MlflowClient()
     model_fqn = f"{catalog}.{schema}.{model_name}"
