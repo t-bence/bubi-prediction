@@ -21,7 +21,7 @@ def run_training(
     train_cutoff: datetime,
     model_name: str,
 ) -> None:
-    spark = SparkSession.builder.getOrCreate()
+    spark: SparkSession = SparkSession.builder.getOrCreate()
 
     logger = configure_logger()
 
@@ -57,7 +57,11 @@ def run_training(
         }
 
     with mlflow.start_run() as run:
-        model = Prophet()
+        model = Prophet(
+            yearly_seasonality=True,
+            weekly_seasonality=True,
+            daily_seasonality=True,
+        )
         model.fit(train_df)
         params = extract_params(model)
         # Prepare future dataframe for prediction

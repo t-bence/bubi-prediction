@@ -8,6 +8,8 @@ To make predictions with the prophet model, we must use the make_future_datafram
 
 We cannot load it as a Spark UDF as far as I know. So then we should make the predictions as a Pandas dataframe, create a Spark DF out of it, then merge it into a table that contains the predictions so far. We should also store the model version and the date of prediction in that so far, so it could be SCD type 2.
 
+"module prophet not found" -- the issue was that mlflow versions were mismatched and prophet was missing in the notebook.
+
 ## Resources
 
 Databricks notebook on model training with feature engineering client:

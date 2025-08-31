@@ -15,6 +15,7 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
     mlflow.set_registry_uri("databricks-uc")
     client = MlflowClient()
     model_fqn = f"{catalog}.{schema}.{model_name}"
+    logger.info(f"Using model {model_fqn}")
     # get challenger version
     try:
         challenger_version = client.get_model_version_by_alias(model_fqn, "Challenger")
@@ -22,7 +23,8 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
         logger.info("No Challenger version exists")
         return
     challenger_run = client.get_run(challenger_version.run_id)
-    challenger_mae = challenger_run.data.metrics.get("test_mean_absolute_error")
+    logger.info(f"Found challenger run {challenger_run}")
+    challenger_mae = challenger_run.data.metrics.get("test_mae")
     logger.info(f"Challenger MAE: {challenger_mae}")
     # get champion version
     try:
@@ -32,7 +34,7 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
         metric_mae_passed = True
     else:
         champion_run = client.get_run(champion_version.run_id)
-        champion_mae = champion_run.data.metrics.get("test_mean_absolute_error")
+        champion_mae = champion_run.data.metrics.get("test_mae")
         logger.info(f"Champion MAE: {champion_mae}")
         metric_mae_passed = challenger_mae < champion_mae
         logger.info(f"MAE metric passed: {metric_mae_passed}")
@@ -44,16 +46,17 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
     )
     # determine if the challenger model can make predictions
     try:
-        model_uri = f"models:/{model_name}@Challenger"
-        challenger_model = mlflow.pyfunc.spark_udf(spark, model_uri)
-        validation_df = spark.read.table(
-            get_table_name(catalog, schema, "gold")
-        ).select(F.col("ts").alias("ds"))
-        feature_columns = [F.col(column) for column in validation_df.columns]
-        preds = validation_df.withColumn(
-            "prediction", challenger_model(F.struct(feature_columns))
+        model_uri = f"models:/{model_fqn}@Challenger"
+        challenger_model = mlflow.prophet.load_model(model_uri)
+        logger.info(f"Loaded model from {model_uri}")
+        validation_df = (
+            spark.read.table(get_table_name(catalog, schema, "gold"))
+            .select(F.col("ts").alias("ds"))
+            .toPandas()
         )
-        logger.info(preds.show())
+        preds = challenger_model.predict(validation_df)
+
+        logger.info(preds[["ds", "yhat"]].head().to_string())
         can_predict = True
     except Exception as e:
         logger.info("Unable to predict on features.")

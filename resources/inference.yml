@@ -1,0 +1,29 @@
+resources:
+  jobs:
+    inference:
+      name: Inference
+
+      schedule:
+        quartz_cron_expression: 0 0 0 * * ? # every day at UTC midnight
+        timezone_id: UTC
+
+      tasks:
+        - task_key: inference
+          spark_python_task:
+            python_file: ../src/inference.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --model_name
+              - ${var.model_name}
+          environment_key: bubi_environment
+      queue:
+        enabled: true
+      environments:
+        - environment_key: bubi_environment
+          spec:
+            environment_version: "3"
+            dependencies:
+              - -r ${workspace.root_path}/files/databricks-requirements.txt
