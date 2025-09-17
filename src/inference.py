@@ -46,11 +46,11 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
 
     logger.info(f"End of interval: {pdf['ts'].iloc[-1]}")
 
-    predictions = model.predict(pdf)
+    pdf["bikes"] = model.predict(pdf)
     # Ensure predictions are in a DataFrame with column 'ts'
 
     preds_df = (
-        spark.createDataFrame(predictions, schema="ts")
+        spark.createDataFrame(pdf)
         .withColumn("model_version", F.lit(champion_version.version))
         .withColumn("prediction_date", F.lit(dt.datetime.now(dt.UTC)))
     )
