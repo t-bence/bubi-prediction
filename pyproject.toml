@@ -1,15 +1,18 @@
 [project]
 name = "bubi-prediction"
 version = "0.1.0"
-description = "Add your description here"
+description = "Predict the number of BUBI bikes"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "holidays>=0.77",
     "mlflow-skinny==2.21.3",
+    "numpy==1.26.4",
+    "pandas==1.5.3",
     "pre-commit>=4.2.0",
-    "prophet==1.1.5",
     "pyspark==3.5.4",
     "pytest==8.3.0",
     "scikit-learn==1.4.2",
     "setuptools>=80.9.0",
+    "xgboost>=3.0.5",
 ]
