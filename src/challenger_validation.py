@@ -1,7 +1,6 @@
 import argparse
 
 import mlflow
-import pyspark.sql.functions as F
 from mlflow.tracking import MlflowClient
 from pyspark.sql import SparkSession
 
@@ -47,16 +46,14 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
     # determine if the challenger model can make predictions
     try:
         model_uri = f"models:/{model_fqn}@Challenger"
-        challenger_model = mlflow.prophet.load_model(model_uri)
+        challenger_model = mlflow.pyfunc.load_model(model_uri)
         logger.info(f"Loaded model from {model_uri}")
-        validation_df = (
-            spark.read.table(get_table_name(catalog, schema, "gold"))
-            .select(F.col("ts").alias("ds"))
-            .toPandas()
-        )
+        validation_df = spark.read.table(
+            get_table_name(catalog, schema, "gold")
+        ).toPandas()
         preds = challenger_model.predict(validation_df)
 
-        logger.info(preds[["ds", "yhat"]].head().to_string())
+        logger.info(preds[:10])
         can_predict = True
     except Exception as e:
         logger.info("Unable to predict on features.")

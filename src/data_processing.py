@@ -70,14 +70,28 @@ logger.info(
 
 # Create silver table
 silver = (
-    spark.read.table(get_table_name(catalog, schema, "bronze"))
+    spark.readStream.table(get_table_name(catalog, schema, "bronze"))
     .transform(extract_json_fields)
     .transform(temporal_deduplication)
 )
 
-(silver.write.mode("overwrite").saveAsTable(get_table_name(catalog, schema, "silver")))
+silver_query = (
+    silver.writeStream.outputMode("append")
+    .queryName("silver_stream")
+    .trigger(availableNow=True)
+    .option(
+        "checkpointLocation",
+        f"/Volumes/{catalog}/{schema}/{checkpoint_volume}/silver",
+    )
+    .toTable(get_table_name(catalog, schema, "silver"))
+)
 
-logger.info("Silver table created")
+silver_query.awaitTermination()
+
+logger.info("Silver query completed")
+logger.info(
+    f"Silver query has written {silver_query.lastProgress['numInputRows']} rows"
+)
 
 # Features
 # Compute the final features

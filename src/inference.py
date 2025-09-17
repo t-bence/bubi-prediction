@@ -2,6 +2,7 @@ import argparse
 import datetime as dt
 
 import mlflow
+import pandas as pd
 import pyspark.sql.functions as F
 from mlflow.tracking import MlflowClient
 from pyspark.sql import SparkSession
@@ -26,7 +27,7 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
         return
 
     model_uri = f"models:/{model_fqn}@Champion"
-    model = mlflow.prophet.load_model(model_uri)
+    model = mlflow.pyfunc.load_model(model_uri)
     logger.info(f"Loaded model from {model_uri}")
 
     HOURS_IN_DAY = 24
@@ -34,25 +35,25 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
     PREDICTION_PERIOD_MINUTES = 10
     periods = int(HOURS_IN_DAY * MINUTES_IN_HOUR / PREDICTION_PERIOD_MINUTES - 1)
 
-    TEN_MINUTE_IN_SECONDS = "600s"
+    now = dt.datetime.now(dt.UTC)
+    future_times = [now + dt.timedelta(minutes=10 * i) for i in range(periods + 1)]
+    pdf = pd.DataFrame({"ts": future_times})
 
-    pdf = model.make_future_dataframe(
-        periods=periods, freq=TEN_MINUTE_IN_SECONDS, include_history=False
-    )
+    logger.info(f"Start of interval: {pdf['ts'][0]}")
 
-    selected_day = str(pdf["ds"][0].date())
-    logger.info(f"Selected day: {selected_day}")
+    logger.info(f"End of interval: {pdf['ts'][-1]}")
 
     predictions = model.predict(pdf)
+    # Ensure predictions are in a DataFrame with column 'ts'
 
     preds_df = (
-        spark.createDataFrame(predictions)
+        spark.createDataFrame(predictions, schema="ts")
         .withColumn("model_version", F.lit(champion_version.version))
         .withColumn("prediction_date", F.lit(dt.datetime.now(dt.UTC)))
     )
 
     # create the inference table if it does not exist
-    inference_table_fqn = model_fqn = f"{catalog}.{schema}.predictions"
+    inference_table_fqn = f"{catalog}.{schema}.predictions"
     logger.info(f"Using predictions table {inference_table_fqn}")
 
     if not spark.catalog.tableExists(inference_table_fqn):
@@ -69,7 +70,7 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
     spark.sql(f"""
         MERGE INTO {inference_table_fqn}
         USING new
-        ON new.ds = {inference_table_fqn}.ds
+        ON new.ts = {inference_table_fqn}.ts
         WHEN MATCHED THEN UPDATE SET *
         WHEN NOT MATCHED THEN INSERT *
     """)
@@ -77,7 +78,7 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
     logger.info(f"Written {preds_df.count()} rows.")
 
     logger.info("Sample data:")
-    logger.info(preds_df.select("ds", "yhat").limit(10).show())
+    logger.info(preds_df.limit(10).show())
 
 
 if __name__ == "__main__":

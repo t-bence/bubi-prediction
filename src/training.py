@@ -1,14 +1,16 @@
 import argparse
 from datetime import datetime
 
+import holidays
 import mlflow
-import mlflow.prophet
 import pandas as pd
 import pyspark.sql.functions as F
 from mlflow.models import infer_signature
-from prophet import Prophet, serialize
 from pyspark.sql import SparkSession
 from sklearn.metrics import mean_absolute_error
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer
+from xgboost import XGBRegressor
 
 from includes.utilities import configure_logger, get_table_name
 
@@ -33,61 +35,68 @@ def run_training(
     mlflow.set_registry_uri("databricks-uc")
 
     # Load gold table
-    gold_df = (
-        spark.read.table(get_table_name(catalog, schema, "gold"))
-        .filter(F.col("station_id") == int(station_id))
-        .selectExpr("ts AS ds", "bikes AS y")
+    gold_df = spark.read.table(get_table_name(catalog, schema, "gold")).filter(
+        F.col("station_id") == int(station_id)
     )
 
-    train_df = gold_df.filter(F.col("ts") <= train_cutoff).toPandas()
-    logger.info(f"Number of rows in training set: {train_df.shape[0]}")
+    train_pdf = gold_df.filter(F.col("ts") <= train_cutoff).toPandas()
+    logger.info(f"Number of rows in training set: {train_pdf.count()}")
 
-    test_df = gold_df.filter(F.col("ts") > train_cutoff).toPandas()
-    logger.info(f"Number of rows in test set: {test_df.shape[0]}")
+    test_pdf = gold_df.filter(F.col("ts") > train_cutoff).toPandas()
+    logger.info(f"Number of rows in test set: {test_pdf.shape[0]}")
 
     mlflow.end_run()
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(experiment_name)
     mlflow.autolog(disable=True)
 
-    def extract_params(pr_model: Prophet) -> dict:
-        params = {attr: getattr(pr_model, attr) for attr in serialize.SIMPLE_ATTRIBUTES}
-        return {
-            k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))
-        }
+    def extract_time_features(X, country="HU"):
+        df = X.copy()
+        ts = pd.to_datetime(df["ts"])
+        hu_holidays = holidays.country_holidays(country)
+        df["hour"] = ts.dt.hour
+        df["minute"] = ts.dt.minute
+        df["day_of_week"] = ts.dt.dayofweek
+        df["month"] = ts.dt.month
+        df["is_holiday"] = ts.dt.date.astype(str).isin(hu_holidays).astype(int)
+        return df[["hour", "minute", "day_of_week", "month", "is_holiday"]]
+
+    pipeline = Pipeline(
+        [
+            (
+                "time_features",
+                FunctionTransformer(extract_time_features, kw_args={"country": "HU"}),
+            ),
+            ("xgb", XGBRegressor()),
+        ]
+    )
+
+    X_train = train_pdf[["ts"]]
+    y_train = train_pdf["bikes"]
+
+    X_test = test_pdf[["ts"]]
+    y_test = test_pdf["bikes"]
 
     with mlflow.start_run() as run:
-        model = Prophet(
-            yearly_seasonality=True,
-            weekly_seasonality=True,
-            daily_seasonality=True,
-        )
-        model.fit(train_df)
-        params = extract_params(model)
-        # Prepare future dataframe for prediction
-        future_date = pd.DataFrame({"ds": ["2025-02-13 12:00:00"]})
-        future_date["ds"] = pd.to_datetime(future_date["ds"])
-        # Predict
-        forecast = model.predict(future_date)
+        pipeline.fit(X_train, y_train)
+
         # Infer model signature
-        signature = infer_signature(future_date, forecast)
-        mlflow.prophet.log_model(
-            model,
+        signature = infer_signature(
+            X_train.head(10), pipeline.predict(X_train.head(10))
+        )
+        mlflow.sklearn.log_model(
+            pipeline,
             artifact_path="model",
             signature=signature,
-            input_example=train_df[["ds"]].head(10),
+            input_example=X_train.head(10),
         )
-        mlflow.log_params(params)
         mlflow.set_tag(key="station_id", value=station_id)
+
         # Evaluate the model on training and test data
-        train_mae = mean_absolute_error(
-            train_df["y"], model.predict(train_df[["ds"]]).loc[:, "yhat"]
-        )
+        train_mae = mean_absolute_error(y_train, pipeline.predict(X_train))
         mlflow.log_metric("train_mae", train_mae)
         logger.info(f"Train MAE: {round(train_mae, 2)}")
-        test_mae = mean_absolute_error(
-            test_df["y"], model.predict(test_df[["ds"]]).loc[:, "yhat"]
-        )
+        test_mae = mean_absolute_error(y_test, pipeline.predict(X_test))
         mlflow.log_metric("test_mae", test_mae)
         logger.info(f"Test MAE: {round(test_mae, 2)}")
         logger.info(f"Run ID: {run.info.run_id}")
