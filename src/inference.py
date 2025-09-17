@@ -36,12 +36,15 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
     periods = int(HOURS_IN_DAY * MINUTES_IN_HOUR / PREDICTION_PERIOD_MINUTES - 1)
 
     now = dt.datetime.now(dt.UTC)
+    # Floor to the nearest lower 10-minute mark
+    floored_minute = (now.minute // 10) * 10
+    now = now.replace(minute=floored_minute, second=0, microsecond=0)
     future_times = [now + dt.timedelta(minutes=10 * i) for i in range(periods + 1)]
     pdf = pd.DataFrame({"ts": future_times})
 
-    logger.info(f"Start of interval: {pdf['ts'][0]}")
+    logger.info(f"Start of interval: {pdf['ts'].iloc[0]}")
 
-    logger.info(f"End of interval: {pdf['ts'][-1]}")
+    logger.info(f"End of interval: {pdf['ts'].iloc[-1]}")
 
     predictions = model.predict(pdf)
     # Ensure predictions are in a DataFrame with column 'ts'
