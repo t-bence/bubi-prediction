@@ -1,0 +1,27 @@
+resources:
+  jobs:
+    inference:
+      name: Monitoring
+
+      schedule:
+        quartz_cron_expression: 0 0 1 * * ? # every day at UTC 1 o'clock
+        timezone_id: UTC
+
+      tasks:
+        - task_key: monitoring
+          spark_python_task:
+            python_file: ../src/monitoring.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+          environment_key: bubi_environment
+      queue:
+        enabled: true
+      environments:
+        - environment_key: bubi_environment
+          spec:
+            environment_version: "3"
+            dependencies:
+              - -r ${workspace.root_path}/files/databricks-requirements.txt

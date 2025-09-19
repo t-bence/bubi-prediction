@@ -61,3 +61,4 @@ jobs:
           databricks bundle run ingestion
           databricks bundle run training
           databricks bundle run inference
+          databricks bundle run monitoring
