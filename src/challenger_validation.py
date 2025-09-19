@@ -24,7 +24,9 @@ def run_challenger_validation(
         logger.info("No Challenger version exists")
         return
     challenger_run = client.get_run(challenger_version.run_id)
-    logger.info(f"Found challenger run {challenger_run}")
+    logger.info(
+        f"Found challenger run {challenger_run.info.run_name} ({challenger_run.info.run_id})"
+    )
     challenger_mae = challenger_run.data.metrics.get("test_mae")
     logger.info(f"Challenger MAE: {challenger_mae}")
     # get champion version
