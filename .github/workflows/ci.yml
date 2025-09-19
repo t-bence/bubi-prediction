@@ -1,0 +1,63 @@
+name: CI
+
+# comes from https://github.com/benitomartin/mlops-databricks-credit-default/blob/main/.github/workflows/ci.yml
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+env:
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        id: setup-python                         # Add an ID for reference
+        with:
+          python-version-file: "pyproject.toml"  # Automatically installs the correct Python version
+                                                 # Specified in requires-python
+      - name: Create virtual environment         # Uses the previous Python version
+        run: |
+          uv venv -p ${{ steps.setup-python.outputs.python-version }} .venv
+
+      - name: Activate virtual environment and install dependencies
+        run: |
+          source .venv/bin/activate
+          uv sync --all-extras
+
+      - name: Run pre-commit checks
+        run: |
+          source .venv/bin/activate
+          pre-commit install
+          pre-commit run --all-files
+
+      - name: Run unit tests
+        run: uv run pytest
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@948d7379a31615a4c8e9ccbbc5445a12d6b32736
+        with:
+          version: 0.262.0
+
+      - name: Deploy to Databricks
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: databricks bundle deploy # --var="git_sha=${{ github.sha }}"
+
+      - name: Run all jobs
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: |
+          databricks bundle run ingestion
+          databricks bundle run training
+          databricks bundle run inference

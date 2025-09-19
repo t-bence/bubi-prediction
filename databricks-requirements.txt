@@ -1,0 +1,2 @@
+holidays>=0.77
+xgboost>=3.0.5

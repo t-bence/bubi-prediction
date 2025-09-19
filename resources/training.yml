@@ -1,0 +1,86 @@
+resources:
+  jobs:
+    training:
+      name: Training
+
+      trigger:
+        # Run this job every day, exactly one day from the last run; see https://docs.databricks.com/api/workspace/jobs/create#trigger
+        periodic:
+          interval: 1
+          unit: DAYS
+
+      tasks:
+        - task_key: baseline
+          spark_python_task:
+            python_file: ../src/baseline_model.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --train_cutoff
+              - ${var.train_cutoff}
+              - --station_id
+              - ${var.station_id}
+              - --experiment_name
+              - ${var.experiment_name}
+              - --model_name
+              - ${var.model_name}
+          environment_key: bubi_environment
+        - task_key: training
+          depends_on:
+            - task_key: baseline
+          spark_python_task:
+            python_file: ../src/training.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --train_cutoff
+              - ${var.train_cutoff}
+              - --station_id
+              - ${var.station_id}
+              - --experiment_name
+              - ${var.experiment_name}
+              - --model_name
+              - ${var.model_name}
+          environment_key: bubi_environment
+        - task_key: promotion
+          depends_on:
+            - task_key: training
+          spark_python_task:
+            python_file: ../src/promotion.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --model_name
+              - ${var.model_name}
+              - --experiment_name
+              - ${var.experiment_name}
+              - --target
+              - ${bundle.target}
+          environment_key: bubi_environment
+        - task_key: challenger_validation
+          depends_on:
+            - task_key: promotion
+          spark_python_task:
+            python_file: ../src/challenger_validation.py
+            parameters:
+              - --catalog
+              - ${var.catalog}
+              - --schema
+              - ${var.schema}
+              - --model_name
+              - ${var.model_name}
+              - --force_promotion
+              - ${var.force_promotion}
+          environment_key: bubi_environment
+      environments:
+        - environment_key: bubi_environment
+          spec:
+            environment_version: "3"
+            dependencies:
+              - -r ${workspace.root_path}/files/databricks-requirements.txt
