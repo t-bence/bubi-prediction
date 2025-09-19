@@ -24,7 +24,8 @@ jobs:
         uses: actions/setup-python@v5
         id: setup-python                         # Add an ID for reference
         with:
-          python-version-file: "pyproject.toml"  # Automatically installs the correct Python version
+          python-version: "3.11" # this is cheating! DBX serverless v3 has Python 3.12, but there is no prebuilt pandas 1.5.3 for that!
+          #python-version-file: "pyproject.toml"  # Automatically installs the correct Python version
                                                  # Specified in requires-python
       - name: Create virtual environment         # Uses the previous Python version
         run: |
