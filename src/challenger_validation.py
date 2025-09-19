@@ -85,7 +85,7 @@ if __name__ == "__main__":
     parser.add_argument("--schema", type=str, required=True, help="Schema name")
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
     parser.add_argument(
-        "--force-promotion", type=bool, required=True, help="Force promotion"
+        "--force_promotion", type=bool, required=True, help="Force promotion"
     )
     args = parser.parse_args()
     run_challenger_validation(
