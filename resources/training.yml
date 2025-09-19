@@ -75,6 +75,8 @@ resources:
               - ${var.schema}
               - --model_name
               - ${var.model_name}
+              - --force_promotion
+              - ${var.force_promotion}
           environment_key: bubi_environment
       environments:
         - environment_key: bubi_environment

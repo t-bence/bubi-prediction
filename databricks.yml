@@ -28,6 +28,9 @@ variables:
   train_cutoff:
     default: "2025-08-30:00:00.000"
     description: The date and time when the training data ends and test data begins
+  force_promotion:
+    default: True
+    description: Whether to force promotion (yes in dev and test)
 
 include:
   - resources/*.yml
@@ -54,6 +57,18 @@ targets:
         default: "2024-03-13:00:00.000"
         description: "Overriding the train test cutoff here for the sample data"
 
+  test:
+    # The default target uses 'mode: development' to create a development copy.
+    # - Deployed resources get prefixed with '[dev my_user_name]'
+    # - Any job schedules and triggers are paused by default.
+    # See also https://docs.databricks.com/dev-tools/bundles/deployment-modes.html.
+    mode: development
+    workspace:
+      host: https://dbc-1bff540e-abbc.cloud.databricks.com/
+    variables:
+      catalog:
+        default: bubi_test
+
   prod:
     mode: production
     workspace:
@@ -68,3 +83,5 @@ targets:
     variables:
       catalog:
         default: bubi_prod
+      force_promotion:
+        default: False

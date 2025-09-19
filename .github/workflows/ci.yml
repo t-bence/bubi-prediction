@@ -3,7 +3,11 @@ name: CI
 # comes from https://github.com/benitomartin/mlops-databricks-credit-default/blob/main/.github/workflows/ci.yml
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+env:
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
 
 
 jobs:
@@ -36,3 +40,24 @@ jobs:
           source .venv/bin/activate
           pre-commit install
           pre-commit run --all-files
+
+      - name: Run unit tests
+        run: uv run pytest
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@948d7379a31615a4c8e9ccbbc5445a12d6b32736
+        with:
+          version: 0.262.0
+
+      - name: Deploy to Databricks
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: databricks bundle deploy # --var="git_sha=${{ github.sha }}"
+
+      - name: Run all jobs
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: |
+          databricks bundle run ingestion
+          databricks bundle run training
+          databricks bundle run inference

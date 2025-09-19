@@ -7,7 +7,9 @@ from pyspark.sql import SparkSession
 from includes.utilities import configure_logger, get_table_name
 
 
-def run_challenger_validation(catalog: str, schema: str, model_name: str) -> None:
+def run_challenger_validation(
+    catalog: str, schema: str, model_name: str, force_promotion: str = "False"
+) -> None:
     spark = SparkSession.builder.getOrCreate()
     logger = configure_logger()
 
@@ -70,6 +72,11 @@ def run_challenger_validation(catalog: str, schema: str, model_name: str) -> Non
         client.set_registered_model_alias(
             name=model_fqn, version=challenger_version.version, alias="Champion"
         )
+    elif force_promotion:
+        logger.info("Promotion to Champion forced")
+        client.set_registered_model_alias(
+            name=model_fqn, version=challenger_version.version, alias="Champion"
+        )
 
 
 if __name__ == "__main__":
@@ -77,5 +84,10 @@ if __name__ == "__main__":
     parser.add_argument("--catalog", type=str, required=True, help="Catalog name")
     parser.add_argument("--schema", type=str, required=True, help="Schema name")
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
+    parser.add_argument(
+        "--force-promotion", type=bool, required=True, help="Force promotion"
+    )
     args = parser.parse_args()
-    run_challenger_validation(args.catalog, args.schema, args.model_name)
+    run_challenger_validation(
+        args.catalog, args.schema, args.model_name, args.force_promotion
+    )
