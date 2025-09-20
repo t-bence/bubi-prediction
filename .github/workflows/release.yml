@@ -1,0 +1,28 @@
+name: CI
+
+# comes from https://github.com/benitomartin/mlops-databricks-credit-default/blob/main/.github/workflows/ci.yml
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+env:
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@948d7379a31615a4c8e9ccbbc5445a12d6b32736
+        with:
+          version: 0.262.0
+
+      - name: Deploy to Databricks
+        env:
+          DATABRICKS_BUNDLE_ENV: prod
+        run: databricks bundle deploy # --var="git_sha=${{ github.sha }}"
