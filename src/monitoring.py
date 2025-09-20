@@ -113,4 +113,4 @@ if __name__ == "__main__":
     parser.add_argument("--catalog", type=str, required=True, help="Catalog name")
     parser.add_argument("--schema", type=str, required=True, help="Schema name")
     args = parser.parse_args()
-    run_monitoring(args.catalog, args.schema, args.model_name)
+    run_monitoring(args.catalog, args.schema)
