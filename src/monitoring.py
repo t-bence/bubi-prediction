@@ -27,6 +27,21 @@ def run_monitoring(catalog: str, schema: str) -> None:
     )
     logger.info("Written monitoring data to table.")
 
+    if (
+        spark.sql(
+            f"SHOW TBLPROPERTIES {monitoring_table_fqn} ('delta.enableChangeDataFeed');"
+        )
+        .collect()[0]
+        .value
+        != "true"
+    ):
+        logger.info("Enabling change data feed on monitoring table.")
+        spark.sql(
+            f"ALTER TABLE {monitoring_table_fqn} SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
+        )
+    else:
+        logger.info("Table already has change data feed enabled.")
+
     import os
 
     from databricks.sdk import WorkspaceClient
