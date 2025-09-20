@@ -6,17 +6,15 @@ from includes.utilities import configure_logger
 
 
 def run_monitoring(catalog: str, schema: str) -> None:
-    spark = SparkSession.builder.getOrCreate()
     logger = configure_logger()
-
+    logger.info(f"Starting monitoring for catalog={catalog}, schema={schema}")
+    spark = SparkSession.builder.getOrCreate()
     gold_table_fqn = f"{catalog}.{schema}.gold"
-
-    # create the inference table if it does not exist
     inference_table_fqn = f"{catalog}.{schema}.predictions"
-    logger.info(f"Using predictions table {inference_table_fqn}")
-
     monitoring_table_fqn = f"{catalog}.{schema}.monitoring"
-
+    logger.info(
+        f"Joining gold and predictions tables to create monitoring table: {monitoring_table_fqn}"
+    )
     (
         spark.table(gold_table_fqn)
         .join(
@@ -27,7 +25,7 @@ def run_monitoring(catalog: str, schema: str) -> None:
         .write.mode("overwrite")
         .saveAsTable(monitoring_table_fqn)
     )
-    logger.info("Written monitoring data")
+    logger.info("Written monitoring data to table.")
 
     import os
 
@@ -37,9 +35,8 @@ def run_monitoring(catalog: str, schema: str) -> None:
         MonitorInferenceLogProblemType,
     )
 
-    print(f"Creating monitor for inference table {monitoring_table_fqn}")
+    logger.info(f"Creating monitor for inference table {monitoring_table_fqn}")
     w = WorkspaceClient()
-
     try:
         info = w.quality_monitors.create(
             table_name=monitoring_table_fqn,
@@ -56,56 +53,36 @@ def run_monitoring(catalog: str, schema: str) -> None:
             # baseline_table_name=f"{catalog}.{schema}.monitor_baseline",
             slicing_exprs=[],  # Slicing dimension
         )
-
+        logger.info("Monitor creation request sent.")
     except Exception as exception:
         if "already exist" in str(exception).lower():
-            print(
-                f"Monitor for {monitoring_table_fqn} already exists, retrieving monitor info:"
+            logger.info(
+                f"Monitor for {monitoring_table_fqn} already exists, retrieving monitor info."
             )
             info = w.quality_monitors.get(table_name=monitoring_table_fqn)
         else:
-            logger.info(exception)
+            logger.error(f"Error creating monitor: {exception}")
             raise exception
 
     import time
 
-    from databricks.sdk.service.catalog import (
-        MonitorInfoStatus,
-        MonitorRefreshInfoState,
-    )
+    from databricks.sdk.service.catalog import MonitorInfoStatus
 
-    # Wait for monitor to be created
+    logger.info("Waiting for monitor to become active...")
     while info.status == MonitorInfoStatus.MONITOR_STATUS_PENDING:
+        logger.info("Monitor status: PENDING. Sleeping 10 seconds...")
         info = w.quality_monitors.get(table_name=monitoring_table_fqn)
         time.sleep(10)
 
-    assert (
-        info.status == MonitorInfoStatus.MONITOR_STATUS_ACTIVE
-    ), "Error creating monitor"
+    if info.status == MonitorInfoStatus.MONITOR_STATUS_ACTIVE:
+        logger.info("Monitor is now ACTIVE.")
+    else:
+        logger.error("Error creating monitor: status is not ACTIVE.")
+        raise RuntimeError("Error creating monitor")
 
-    def get_refreshes():
-        return w.quality_monitors.list_refreshes(
-            table_name=monitoring_table_fqn
-        ).refreshes
-
-    refreshes = get_refreshes()
-    if len(refreshes) == 0:
-        w.quality_monitors.run_refresh(table_name=monitoring_table_fqn)
-        time.sleep(5)
-        refreshes = get_refreshes()
-
-    run_info = refreshes[0]
-    while run_info.state in (
-        MonitorRefreshInfoState.PENDING,
-        MonitorRefreshInfoState.RUNNING,
-    ):
-        run_info = w.quality_monitors.get_refresh(
-            table_name=monitoring_table_fqn, refresh_id=run_info.refresh_id
-        )
-        logger.info(f"Waiting for refresh to complete {run_info.state}...")
-        time.sleep(30)
-
-    assert run_info.state == MonitorRefreshInfoState.SUCCESS, "Monitor refresh failed"
+    logger.info("Monitor refresh started.")
+    w.quality_monitors.run_refresh(table_name=monitoring_table_fqn)
+    logger.info("Exiting.")
 
 
 if __name__ == "__main__":
