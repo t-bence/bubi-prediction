@@ -1,6 +1,6 @@
 resources:
   jobs:
-    inference:
+    monitoring:
       name: Monitoring
 
       schedule:
