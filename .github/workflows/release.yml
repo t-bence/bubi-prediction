@@ -1,4 +1,4 @@
-name: CI
+name: Release
 
 # comes from https://github.com/benitomartin/mlops-databricks-credit-default/blob/main/.github/workflows/ci.yml
 

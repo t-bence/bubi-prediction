@@ -26,17 +26,11 @@ jobs:
         with:
           python-version-file: "pyproject.toml"  # Automatically installs the correct Python version
                                                  # Specified in requires-python
+          cache: pip
+
       - name: Create virtual environment         # Uses the previous Python version
         run: |
           uv venv -p ${{ steps.setup-python.outputs.python-version }} .venv
-
-      - name: Cache venv
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-venv-
 
       - name: Activate virtual environment and install dependencies
         run: |
