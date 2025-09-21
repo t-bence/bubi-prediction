@@ -3,7 +3,7 @@ name = "bubi-prediction"
 version = "0.1.0"
 description = "Predict the number of BUBI bikes"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "databricks-sdk==0.49.0",
     "holidays>=0.77",
