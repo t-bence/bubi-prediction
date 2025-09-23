@@ -27,3 +27,4 @@ resources:
             environment_version: "4"
             dependencies:
               - xgboost>=3.0.5
+              - holidays>=0.77
