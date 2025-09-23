@@ -41,6 +41,8 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
     now = now.replace(minute=floored_minute, second=0, microsecond=0)
     future_times = [now + dt.timedelta(minutes=10 * i) for i in range(periods + 1)]
     pdf = pd.DataFrame({"ts": future_times})
+    # mark timestamp as locale-naive
+    pdf["ts"] = pdf["ts"].tz_localize(None)
 
     logger.info(f"Start of interval: {pdf['ts'].iloc[0]}")
 
