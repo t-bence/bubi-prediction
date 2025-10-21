@@ -55,6 +55,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "commitizen" },
+    { name = "pyspark" },
 ]
 
 [package.metadata]
@@ -73,7 +74,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "commitizen", specifier = ">=4.9.1" }]
+dev = [
+    { name = "commitizen", specifier = ">=4.9.1" },
+    { name = "pyspark", specifier = ">=4.0.0" },
+]
 
 [[package]]
 name = "cachetools"

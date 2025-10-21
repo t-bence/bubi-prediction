@@ -2,11 +2,13 @@ import argparse
 import datetime as dt
 
 import mlflow
-import pandas as pd
-import pyspark.sql.functions as F
 from mlflow.tracking import MlflowClient
 from pyspark.sql import SparkSession
 
+from includes.inference import (
+    create_prediction_time_dataframe,
+    create_predictions_spark_dataframe,
+)
 from includes.utilities import configure_logger
 
 
@@ -30,31 +32,16 @@ def run_inference(catalog: str, schema: str, model_name: str) -> None:
     model = mlflow.pyfunc.load_model(model_uri)
     logger.info(f"Loaded model from {model_uri}")
 
-    HOURS_IN_DAY = 24
-    MINUTES_IN_HOUR = 60
-    PREDICTION_PERIOD_MINUTES = 10
-    periods = int(HOURS_IN_DAY * MINUTES_IN_HOUR / PREDICTION_PERIOD_MINUTES - 1)
-
-    now = dt.datetime.now(dt.UTC)
-    # Floor to the nearest lower 10-minute mark
-    floored_minute = (now.minute // 10) * 10
-    now = now.replace(minute=floored_minute, second=0, microsecond=0)
-    future_times = [now + dt.timedelta(minutes=10 * i) for i in range(periods + 1)]
-    pdf = pd.DataFrame({"ts": future_times})
-    # mark timestamp as locale-naive
-    pdf["ts"] = pdf["ts"].tz_localize(None)
+    pdf = create_prediction_time_dataframe()
 
     logger.info(f"Start of interval: {pdf['ts'].iloc[0]}")
 
     logger.info(f"End of interval: {pdf['ts'].iloc[-1]}")
 
-    pdf["bikes"] = model.predict(pdf)
-    # Ensure predictions are in a DataFrame with column 'ts'
+    bikes = model.predict(pdf)
 
-    preds_df = (
-        spark.createDataFrame(pdf)
-        .withColumn("model_version", F.lit(champion_version.version))
-        .withColumn("prediction_date", F.lit(dt.datetime.now(dt.UTC)))
+    preds_df = create_predictions_spark_dataframe(
+        pdf, bikes, champion_version.version, dt.datetime.now(dt.UTC), spark
     )
 
     # create the inference table if it does not exist

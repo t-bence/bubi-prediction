@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 def get_train_cutoff(date_string: str) -> datetime:
     """Get train cutoff: if date_string is a valid date representation
-        cast that into datetime. If it is not, return the date 2 weeks ago.
+    cast that into datetime. If it is not, return the date 2 weeks ago.
 
     Parameters
     ----------
