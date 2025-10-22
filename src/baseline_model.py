@@ -8,6 +8,7 @@ from pyspark.sql import SparkSession
 from sklearn.dummy import DummyRegressor
 from sklearn.metrics import mean_absolute_error
 
+from includes.training import get_train_cutoff
 from includes.utilities import (
     configure_logger,
     get_table_name,
@@ -20,7 +21,7 @@ def run_baseline(
     schema: str,
     experiment_name: str,
     station_id: int,
-    train_cutoff: datetime,
+    train_cutoff_string: str,
     model_name: str,
     force_retrain: bool,
 ) -> None:
@@ -41,6 +42,9 @@ def run_baseline(
     gold_df = spark.read.table(get_table_name(catalog, schema, "gold")).filter(
         F.col("station_id") == int(station_id)
     )
+
+    train_cutoff: datetime = get_train_cutoff(train_cutoff_string)
+
     train_df = gold_df.filter(F.col("ts") <= train_cutoff).toPandas()
     logger.info(f"Number of rows in training set: {train_df.shape[0]}")
     test_df = gold_df.filter(F.col("ts") > train_cutoff).toPandas()
@@ -100,13 +104,13 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
     parser.add_argument("--force_retrain", action="store_true", help="Force retrain")
     args = parser.parse_args()
-    train_cutoff = datetime.fromisoformat(args.train_cutoff)
+
     run_baseline(
         args.catalog,
         args.schema,
         args.experiment_name,
         args.station_id,
-        train_cutoff,
+        args.train_cutoff,
         args.model_name,
         args.force_retrain,
     )
