@@ -17,7 +17,9 @@ def create_prediction_time_dataframe(now: dt.datetime | None = None) -> pd.DataF
     now = now.replace(minute=floored_minute, second=0, microsecond=0)
     future_times = [now + dt.timedelta(minutes=10 * i) for i in range(periods + 1)]
     pdf = pd.DataFrame({"ts": future_times})
-    pdf["ts"].dt.tz_localize(None)  # remove time zone for compatbility reasons
+    pdf["ts"] = pdf["ts"].dt.tz_localize(
+        None
+    )  # remove time zone for compatbility reasons
 
     return pdf
 
