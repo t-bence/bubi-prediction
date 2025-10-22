@@ -17,31 +17,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-
       - name: Set up Python
         uses: actions/setup-python@v5
         id: setup-python                         # Add an ID for reference
         with:
           python-version-file: "pyproject.toml"  # Automatically installs the correct Python version
                                                  # Specified in requires-python
-          cache: pip
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
-      - name: Create virtual environment         # Uses the previous Python version
-        run: |
-          uv venv -p ${{ steps.setup-python.outputs.python-version }} .venv
-
-      - name: Activate virtual environment and install dependencies
-        run: |
-          source .venv/bin/activate
-          uv sync --all-extras
+      - name: Install dependencies
+        run: uv sync --dev --locked --all-extras
 
       - name: Run pre-commit checks
         run: |
-          source .venv/bin/activate
-          pre-commit install
-          pre-commit run --all-files
+          uv run pre-commit install
+          uv run pre-commit run --all-files
 
       - name: Run unit tests
         run: uv run pytest
@@ -56,11 +49,22 @@ jobs:
           DATABRICKS_BUNDLE_ENV: test
         run: databricks bundle deploy # --var="git_sha=${{ github.sha }}"
 
-      - name: Run all jobs
+      - name: Run ingestion job
         env:
           DATABRICKS_BUNDLE_ENV: test
-        run: |
-          databricks bundle run ingestion
-          databricks bundle run training
-          databricks bundle run inference
-          databricks bundle run monitoring
+        run: databricks bundle run ingestion
+
+      - name: Run training job
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: databricks bundle run training
+
+      - name: Run inference job
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: databricks bundle run inference
+
+      - name: Run monitoring job
+        env:
+          DATABRICKS_BUNDLE_ENV: test
+        run: databricks bundle run monitoring

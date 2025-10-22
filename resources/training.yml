@@ -81,6 +81,7 @@ resources:
       environments:
         - environment_key: bubi_environment
           spec:
-            environment_version: "3"
+            environment_version: "4"
             dependencies:
-              - -r ${workspace.root_path}/files/databricks-requirements.txt
+              - holidays>=0.77
+              - xgboost>=3.0.5

@@ -26,8 +26,8 @@ variables:
     default: 2100
     description: Station ID to train models for. Default is Krisztina square (2100)
   train_cutoff:
-    default: "2025-08-30:00:00.000"
-    description: The date and time when the training data ends and test data begins
+    default: ""
+    description: The date and time when the training data ends and test data begins. Leave empty for prod
   force_promotion:
     default: True
     description: Whether to force promotion (yes in dev and test)
@@ -54,8 +54,7 @@ targets:
 
     variables:
       train_cutoff:
-        default: "2024-03-13:00:00.000"
-        description: "Overriding the train test cutoff here for the sample data"
+        default: "2024-03-13T00:00.000"
 
   test:
     # The default target uses 'mode: development' to create a development copy.
@@ -68,6 +67,8 @@ targets:
     variables:
       catalog:
         default: bubi_test
+      train_cutoff:
+        default: "2025-08-30T00:00.000"
 
   prod:
     mode: production

@@ -1,7 +1,5 @@
-from datetime import datetime
+import datetime as dt
 
-import pytest
-from pyspark.sql import SparkSession
 from pyspark.sql.types import (
     BooleanType,
     DoubleType,
@@ -11,6 +9,7 @@ from pyspark.sql.types import (
     StructType,
     TimestampType,
 )
+from pyspark.testing import assertDataFrameEqual
 
 from includes.data_processing import (
     extract_json_fields,
@@ -19,14 +18,7 @@ from includes.data_processing import (
 )
 
 
-@pytest.fixture(scope="session")
-def spark():
-    return SparkSession.builder.getOrCreate()
-
-
 def test_extract_timestamp_from_filename(spark):
-    from datetime import datetime
-
     import pyspark.sql.functions as F
     from pyspark.sql import Row
 
@@ -34,10 +26,18 @@ def test_extract_timestamp_from_filename(spark):
     dash_row = Row(filename="2024-03-13T02-50-00Z.json")
     # Test colon format
     colon_row = Row(filename="2024-03-13T02:50:00Z.json")
-    df = spark.createDataFrame([dash_row, colon_row])
-    result = df.select(extract_timestamp_from_filename(F.col("filename"))).collect()
-    expected = [datetime(2024, 3, 13, 2, 50, 0), datetime(2024, 3, 13, 2, 50, 0)]
-    assert [row.ts for row in result] == expected
+    result = spark.createDataFrame([dash_row, colon_row]).select(
+        extract_timestamp_from_filename(F.col("filename")).alias("ts")
+    )
+    expected = spark.createDataFrame(
+        [
+            (dt.datetime(2024, 3, 13, 2, 50, 0, tzinfo=dt.UTC),),
+            (dt.datetime(2024, 3, 13, 2, 50, 0, tzinfo=dt.UTC),),
+        ],
+        schema="ts TIMESTAMP",
+    )
+
+    assertDataFrameEqual(result, expected)
 
 
 def test_json_processing(spark) -> None:
@@ -58,7 +58,7 @@ def test_json_processing(spark) -> None:
 
     data = [
         (
-            datetime(2024, 3, 13, 2, 50, 0),
+            dt.datetime(2024, 3, 13, 2, 50, 0, tzinfo=dt.UTC),
             2297,
             12,
             False,
@@ -67,7 +67,7 @@ def test_json_processing(spark) -> None:
             19.028615,
         ),
         (
-            datetime(2024, 3, 13, 2, 50, 0),
+            dt.datetime(2024, 3, 13, 2, 50, 0, tzinfo=dt.UTC),
             2298,
             20,
             False,
@@ -79,9 +79,7 @@ def test_json_processing(spark) -> None:
 
     expected = spark.createDataFrame(data, schema)
 
-    from pandas.testing import assert_frame_equal
-
-    assert_frame_equal(result.toPandas(), expected.toPandas())
+    assertDataFrameEqual(result, expected)
 
 
 def test_temporal_deduplication(spark):
@@ -95,17 +93,17 @@ def test_temporal_deduplication(spark):
 
     data = [
         (
-            datetime(2024, 3, 13, 2, 40, 0),
+            dt.datetime(2024, 3, 13, 2, 40, 0, tzinfo=dt.UTC),
             1,
             1,
         ),
         (
-            datetime(2024, 3, 13, 2, 50, 0),
+            dt.datetime(2024, 3, 13, 2, 50, 0, tzinfo=dt.UTC),
             1,
             2,
         ),
         (
-            datetime(2024, 3, 13, 2, 55, 0),
+            dt.datetime(2024, 3, 13, 2, 55, 0, tzinfo=dt.UTC),
             1,
             2,
         ),

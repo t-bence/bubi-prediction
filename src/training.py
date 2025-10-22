@@ -12,6 +12,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 from xgboost import XGBRegressor
 
+from includes.training import get_train_cutoff
 from includes.utilities import configure_logger, get_table_name
 
 
@@ -20,7 +21,7 @@ def run_training(
     schema: str,
     experiment_name: str,
     station_id: int,
-    train_cutoff: datetime,
+    train_cutoff_string: str,
     model_name: str,
 ) -> None:
     spark: SparkSession = SparkSession.builder.getOrCreate()
@@ -29,7 +30,7 @@ def run_training(
 
     logger.info(
         f"Parameters: catalog={catalog}, schema={schema}, experiment_name={experiment_name}, "
-        f"station_id={station_id}, train_cutoff={train_cutoff}, model_name={model_name}"
+        f"station_id={station_id}, train_cutoff_string={train_cutoff_string}, model_name={model_name}"
     )
 
     mlflow.set_registry_uri("databricks-uc")
@@ -39,8 +40,11 @@ def run_training(
         F.col("station_id") == int(station_id)
     )
 
+    train_cutoff: datetime = get_train_cutoff(train_cutoff_string)
+    logger.info(f"Real train cutoff: {train_cutoff}")
+
     train_pdf = gold_df.filter(F.col("ts") <= train_cutoff).toPandas()
-    logger.info(f"Number of rows in training set: {train_pdf.count()}")
+    logger.info(f"Number of rows in training set: {train_pdf.shape[0]}")
 
     test_pdf = gold_df.filter(F.col("ts") > train_cutoff).toPandas()
     logger.info(f"Number of rows in test set: {test_pdf.shape[0]}")
@@ -115,12 +119,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
     args = parser.parse_args()
-    train_cutoff = datetime.fromisoformat(args.train_cutoff)
+
     run_training(
         args.catalog,
         args.schema,
         args.experiment_name,
         args.station_id,
-        train_cutoff,
+        args.train_cutoff,
         args.model_name,
     )
