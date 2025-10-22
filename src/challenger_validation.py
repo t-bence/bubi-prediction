@@ -8,10 +8,12 @@ from includes.utilities import configure_logger, get_table_name
 
 
 def run_challenger_validation(
-    catalog: str, schema: str, model_name: str, force_promotion: str = "False"
+    catalog: str, schema: str, model_name: str, force_promotion_string: str = "False"
 ) -> None:
     spark = SparkSession.builder.getOrCreate()
     logger = configure_logger()
+
+    force_promotion = force_promotion_string.lower() == "true"
 
     mlflow.set_registry_uri("databricks-uc")
     client = MlflowClient()
@@ -79,6 +81,8 @@ def run_challenger_validation(
         client.set_registered_model_alias(
             name=model_fqn, version=challenger_version.version, alias="Champion"
         )
+    else:
+        logger.info("No promotion this time.")
 
 
 if __name__ == "__main__":
@@ -87,7 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("--schema", type=str, required=True, help="Schema name")
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
     parser.add_argument(
-        "--force_promotion", type=bool, required=True, help="Force promotion"
+        "--force_promotion", type=str, required=True, help="Force promotion"
     )
     args = parser.parse_args()
     run_challenger_validation(
