@@ -94,6 +94,7 @@ if __name__ == "__main__":
         "--force_promotion", type=str, required=True, help="Force promotion"
     )
     args = parser.parse_args()
+
     run_challenger_validation(
         args.catalog, args.schema, args.model_name, args.force_promotion
     )

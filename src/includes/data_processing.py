@@ -1,8 +1,10 @@
-from pyspark.sql import DataFrame
+from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 
 
-def extract_timestamp_from_filename(filename_col: F.col) -> F.col:
+def extract_timestamp_from_filename(
+    filename_col: Column,
+) -> Column:
     """
     Extracts timestamp from filename supporting two formats:
     - "yyyy-MM-dd'T'HH-mm-ss'Z.json'"
@@ -43,9 +45,13 @@ def extract_json_fields(df: DataFrame) -> DataFrame:
     """
 
     return (
-        df.select(
-            extract_timestamp_from_filename(F.col("filename")),
-            F.explode(F.col("countries")[0].cities[0].places).alias("places"),
+        df.withColumn("ts", extract_timestamp_from_filename(F.col("filename")))
+        .filter(
+            F.array_size(F.col("countries")[0].cities) > 0
+        )  # just throw out missing data at this point
+        .withColumn(
+            "places",
+            F.explode(F.col("countries")[0].cities[0].places),
         )
         .filter(F.col("places.spot"))  # keep stations only, not bikes left around
         .select(
